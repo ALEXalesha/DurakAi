@@ -115,3 +115,7 @@ MUTANTS += [
     ("ui: потоки не ждут", AT, "            j.wait(left)", "            pass", TU),
     ("ui: перевод мышью не работает", TBL, "                if m[0] in (ATTACK, TRANSFER):", "                if m[0] == ATTACK:", TU),
 ]
+MUTANTS += [
+    ("passport: другой поиск у сильного", "game/ai/search.py", '"strong": dict(samples=24, use_net=True, exact=True)',
+     '"strong": dict(samples=20, use_net=True, exact=True)', "tests/test_passport.py"),
+]

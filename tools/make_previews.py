@@ -81,6 +81,16 @@ def main(out):
         g.show_page("stats")
         settle(app, g, 200)
         shots.append((window.grab(), f"preview_stats{suffix}.png"))
+    # картинка для списка игр в ИИ-Игротеке: 16:9
+    ctx.set_theme("dark")
+    window.resize(1280, 720)
+    g.change("players", 2)
+    g.change("show_thoughts", True)
+    g.start_game(seed=11)
+    play_until(app, g, lambda s: s.human_turn() and s.state.table and s.state.bout >= 2, bot)
+    settle(app, g, 2500)
+    shots.append((window.grab(), "preview.png"))
+    g.change("show_thoughts", False)
     for pix, name in shots:
         pix.save(os.path.join(out, name))
         print(name)

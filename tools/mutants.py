@@ -36,3 +36,15 @@ MUTANTS = [
      "self.hands[d] |= C.mask(a for a, _ in self.table)", TD),
     ("rules: козырь не последним", E, "got_trump = k == len(self.deck)", "got_trump = False", TD),
 ]
+O = "game/core/observation.py"
+TH = "tests/test_honesty.py"
+MUTANTS += [
+    ("honesty: видны чужие руки", O, "hand_sizes=tuple(h.bit_count() for h in state.hands),",
+     "hand_sizes=tuple(state.hands),", TH),
+    ("honesty: видна колода", O, "deck_size=len(state.deck),", "deck_size=tuple(state.deck),", TH),
+    ("honesty: чужие ходы видны", O,
+     "legal=tuple(state.legal_moves()) if state.turn == player else (),",
+     "legal=tuple(state.legal_moves()),", TH),
+    ("honesty: взятые не известны", O, "known[e[1]] |= e[2]", "pass", TH),
+    ("honesty: сыгранная остаётся известной", O, "known[e[1]] &= ~(1 << e[2])", "pass", TH),
+]

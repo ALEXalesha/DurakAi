@@ -14,7 +14,7 @@ import random
 from game.core import cards as C
 from game.core.durak import ATTACK, DEFEND, MOVE_PASS, MOVE_TAKE, PASS, TAKE, TRANSFER
 
-LEVELS = ("random", "novice")
+LEVELS = ("random", "novice", "medium", "strong")
 
 
 def strength(c, trump):

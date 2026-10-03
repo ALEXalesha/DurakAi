@@ -75,3 +75,17 @@ MUTANTS += [
      "        hands[q] = obs.hand if q == obs.player else obs.known[q]",
      "        hands[q] = obs.hand if q == obs.player else 0", TTR),
 ]
+S = "game/ai/search.py"
+TS = "tests/test_search.py"
+MUTANTS += [
+    ("search: перебор за соперника максимизирует", S, "maximize = s.turn == self.me",
+     "maximize = True", TS),
+    ("search: отбой не доигрывается", S, "        if s.over or (s.bout != bout and not s.table):\n            return s",
+     "        return s", TS),
+    ("search: стоп не слушается", S,
+     "if k >= 2 and ((stop is not None and stop.is_set()) or", "if k >= 2 and ((False) or", TS),
+    ("search: формула наоборот", S, "return float(np.tanh(0.45 * weight * (others / n_alive - mine)))",
+     "return float(np.tanh(0.45 * weight * (mine - others / n_alive)))", TS),
+    ("search: без точного перебора", S, "        if self.exact is not None and exact_applicable(obs):",
+     "        if False:", TS),
+]

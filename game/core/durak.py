@@ -128,7 +128,8 @@ class State:
         s.defender = s.next_active(s.attacker)
         s.turn = s.attacker
         if s.log is not None:
-            s.log.append(("start", s.attacker, s.trump_card, s.trump))
+            s.log.append(("start", s.attacker, s.trump_card, s.trump,
+                          tuple(h.bit_count() for h in s.hands)))
         return s
 
     def clone(self, log=False):

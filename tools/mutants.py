@@ -63,3 +63,15 @@ MUTANTS += [
     ("tournament: места не меняются", TT, "seat = i % 2", "seat = 0", TB),
     ("tournament: зерно хода постоянное", TT, "seed=move_seed(deck_seed, k)", "seed=0", TB),
 ]
+TR = "game/ai/tracker.py"
+TTR = "tests/test_tracker.py"
+MUTANTS += [
+    ("tracker: «не отбился» не учитывается", TR, "w[q, c] = min(w[q, c], TAKE_W)", "pass", TTR),
+    ("tracker: козыри не бьют", TR, "    if s != trump:\n        m |= C.SUIT_MASK[trump]\n", "", TTR),
+    ("tracker: без нормировки столбцов", TR, "        M *= scale\n", "", TTR),
+    ("tracker: козырь не в колоде", TR, "        P[obs.trump_card, n] = 1.0", "        pass", TTR),
+    ("tracker: раскладка без весов", TR, "        p = P[pool[idx], q] + 1e-9", "        p = np.ones(len(idx))", TTR),
+    ("tracker: известные не в раскладке", TR,
+     "        hands[q] = obs.hand if q == obs.player else obs.known[q]",
+     "        hands[q] = obs.hand if q == obs.player else 0", TTR),
+]

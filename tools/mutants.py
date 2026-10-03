@@ -48,3 +48,18 @@ MUTANTS += [
     ("honesty: взятые не известны", O, "known[e[1]] |= e[2]", "pass", TH),
     ("honesty: сыгранная остаётся известной", O, "known[e[1]] &= ~(1 << e[2])", "pass", TH),
 ]
+G = "game/ai/agents.py"
+TB = "tests/test_bots.py"
+TT = "game/ai/tournament.py"
+MUTANTS += [
+    ("bots: атака старшей", G, "key = (strength(c, trump), not pair, c)",
+     "key = (-strength(c, trump), not pair, c)", TB),
+    ("bots: не бережёт козыри", G, "if c // 9 == trump and deck_size > 6 and c % 9 >= 5:",
+     "if False:", TB),
+    ("bots: подкидывает козыри", G, "            if c // 9 == trump:\n                continue\n",
+     "", TB),
+    ("bots: тратит карты, хотя не побить", G, "if {m[2] for m in defends} != undefended_slots:",
+     "if not defends:", TB),
+    ("tournament: места не меняются", TT, "seat = i % 2", "seat = 0", TB),
+    ("tournament: зерно хода постоянное", TT, "seed=move_seed(deck_seed, k)", "seed=0", TB),
+]

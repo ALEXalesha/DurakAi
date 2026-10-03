@@ -57,11 +57,12 @@ class MatchResult:
 
 
 def match(hero, villain, games, seed=0, players=2, transfer=False, first_bout_five=False,
-          progress=None):
-    """hero против villain-ов. games - число партий (вдвоём - чётное, парами)."""
+          progress=None, indices=None):
+    """hero против villain-ов. games - число партий (вдвоём - чётное, парами).
+    indices - только эти номера партий (для деления турнира между процессами)."""
     rules = Rules(players=players, transfer=transfer, first_bout_five=first_bout_five)
     res = MatchResult()
-    for i in range(games):
+    for i in (range(games) if indices is None else indices):
         if players == 2:
             deck_seed = seed * 1_000_003 + i // 2
             seat = i % 2

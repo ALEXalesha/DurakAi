@@ -89,3 +89,15 @@ MUTANTS += [
     ("search: без точного перебора", S, "        if self.exact is not None and exact_applicable(obs):",
      "        if False:", TS),
 ]
+N = "game/ai/net.py"
+SP = "game/train/selfplay.py"
+TN = "tests/test_net_train.py"
+MUTANTS += [
+    ("net: без поворота мастей", N, "_ROT = [[(s - t - 1) % 4 for s in range(4)] for t in range(4)]",
+     "_ROT = [[s for s in range(4)] for t in range(4)]", TN),
+    ("net: колода не во входе", N, "    put_mask(v, 108, deckm, t)\n", "", TN),
+    ("net: градиент со знаком минус", N, "self.backward((2.0 / len(y)) * diff)",
+     "self.backward((-2.0 / len(y)) * diff)", TN),
+    ("train: снимок без Adam", SP, "        self.opt.t = int(a[\"adam.t\"])\n", "", TN),
+    ("train: цель без знака", SP, "(-1.0 if s.fool == q else 1.0)", "(1.0 if s.fool == q else 1.0)", TN),
+]

@@ -101,3 +101,17 @@ MUTANTS += [
     ("train: снимок без Adam", SP, "        self.opt.t = int(a[\"adam.t\"])\n", "", TN),
     ("train: цель без знака", SP, "(-1.0 if s.fool == q else 1.0)", "(1.0 if s.fool == q else 1.0)", TN),
 ]
+TBL = "game/ui/table.py"
+W = "game/ui/widget.py"
+AT = "game/ui/ai_thread.py"
+TU = "tests/test_ui.py"
+MUTANTS += [
+    ("ui: закрытые карты на своих местах", TBL, "face = self.reveal or (mine and self.viewer >= 0)",
+     "face = True", TU),
+    ("ui: мысли за ИИ", W, "self.ai.request_thoughts(self.token, s.obs(s.human), self.rng.randrange(2 ** 31))",
+     "self.ai.request_thoughts(self.token, s.obs(1), self.rng.randrange(2 ** 31))", TU),
+    ("ui: подглядывание не отмечается", W, "                self.session.peeked = True", "                pass", TU),
+    ("ui: статистика не пишется", W, "            if not s.peeked:", "            if s.peeked:", TU),
+    ("ui: потоки не ждут", AT, "            j.wait(left)", "            pass", TU),
+    ("ui: перевод мышью не работает", TBL, "                if m[0] in (ATTACK, TRANSFER):", "                if m[0] == ATTACK:", TU),
+]

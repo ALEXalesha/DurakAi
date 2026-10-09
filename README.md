@@ -21,6 +21,8 @@ discard pile, trump, deck size, card counts, who picked up what).
 ## Features
 
 - **Throw-in Durak** by default, **transfer Durak** as a switch. 36-card deck.
+- Two simplifications compared with a live table: cards go down one at a time, and you can
+  throw in only when everything on the table is beaten or the defender has said "take".
 - **2 to 4 players**: one human, the rest are AI.
 - Three AI levels: **novice**, **medium**, **strong**, plus an **AI vs AI** demo with open cards.
 - **AI thoughts**: a 4 × 9 grid per opponent and for the deck with the probability of each card, and the strong AI's score of each of your moves.
@@ -94,13 +96,63 @@ finishes each bout with simple rules, so its leaf evaluation has to know the val
 position under that kind of play. Training on the outcomes of simple-rule games (with 10%
 random moves) gave 75-77% at once.
 
+## What the pre-release review found (1.0.0)
+
+Before the release a second agent read the code, and the AI game room shell held the game in
+a tab next to other games for the first time. Found and fixed, each with a test and a mutant:
+
+| In 0.9.0 | Risk | Now |
+|---|---|---|
+| The game widget called `gc.freeze()` | The garbage collector is per process: inside the shell every object alive at that moment (about 625 thousand in the benchmark) moved to the permanent generation and could never be freed, even as garbage | No call; a law test checks that creating the widget and playing do not change the frozen count, the enabled flag or the thresholds, and that `game/` and `aikit/` contain no `gc.freeze`, `disable` or `set_threshold` |
+| Each AI request is its own QThread, a child of the widget | Threads were kept until the window closed, with their agent and observation: 51, 92, 136 objects after three two-player games | A finished thread is deleted (`deleteLater`); after a game at most one thread object is left |
+| The "Play" and "New game" buttons passed `clicked(False)` as the seed | Every game started from a button had the same deal (seed 0); the N key worked, so the tests missed it | `start_game` does not take a bool as a seed, the buttons call it without arguments |
+| Space and T worked on every page | From the menu, stats or settings they played "Done" or "Take" for the human in the hidden game, which then played out in the background and went into the stats | Human moves are accepted only on the table page |
+| The exact endgame solver ignored the stop flag and the move time limit | The strong AI thought up to 2.8 s with a 1.5 s limit, and closing the window could miss the 2 s contract | The flag and the deadline are checked every 64 nodes, then regular search takes over |
+| No deal animation (spec §5) | Cards appeared in the hands at once | Cards fly from the deck one after another; the AI's first move waits for the last one |
+| `tests/test_privacy.py` banned the origin host | In a clone from GitHub the origin is `github.com`, which the publish script legitimately contains: the check would fail on GitHub CI | Public hosts (github.com and similar) are not treated as private |
+
+**Pause in a tab.** The shell calls `pause()` when a tab is hidden and `resume()` when it is
+shown again. The game now has its own: the AI stops thinking and moving, timers stop, card
+flights end at once; after resume the game continues from the same place. Without them the
+shell only stopped timers, and an AI answer arriving from its thread still made a move in
+the hidden tab.
+
+**Why `gc.freeze()` is not needed.** It came from ChessCheckersAi: a full collection holds
+the GIL and the window stalls during search. Benchmark `tools/gc_bench.py`: the strong AI
+without a time limit chooses a move in the same 600 positions, measured in thread CPU time
+(other jobs were running on the machine, so wall time is noisy).
+
+| In memory | Search, CPU s for 600 moves | Full collections during search |
+|---|---|---|
+| game only, with `gc.freeze` | 14.7 | 4, 31 ms total |
+| game only, without | 14.9 | 4, 94 ms total |
+| game plus 300 thousand "shell" objects, with `gc.freeze` | 15.3 / 15.2 / 15.3 | 4, 31-47 ms total |
+| same, without | 14.7 / 15.2 / 15.2 | 1, 94-125 ms |
+
+Search speed is the same, the difference is within run-to-run noise. Without the freeze the
+window may stall for about 0.1 s once per 15 seconds of pure AI computation, and only in a
+large shell; the game alone holds about 35 thousand objects, and a full collection takes
+less than 16 ms, one Windows timer tick. The freeze cost the shell memory for good.
+
+## Known limits
+
+- **AI reply time is not equalized.** A forced move (pass when there is nothing to throw)
+  comes right after the pause from the settings, a move with a choice comes after search.
+  Usually the gap is small: the strong AI computes half of its moves in 0.02 s and 90% in
+  under 0.12 s. But 1% of moves take over 1.3 s, and an attentive player can tell it had a
+  choice.
+- After a transfer the draw order starts from the player who transferred, not from the first
+  attacker. Table rules differ here; it only matters with 3-4 players in transfer Durak when
+  the deck is almost empty.
+
 ## Tests
 
-216 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
+229 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
 AI waits have timeouts. Rules are covered by hand-built deals for every rule plus
 property tests on random games (all 36 cards always accounted for). `tools/mutate.py`
-breaks the product on purpose in 56 places (rules, honesty, tracking, search, network,
-training, window) - every mutant is caught. `python main.py --selftest out.txt` checks a
+breaks the product on purpose in 67 places (rules, honesty, tracking, search, network,
+training, window, and since 1.0.0 life in a tab: collector, pause, threads, deal) - every
+mutant is caught. `python main.py --selftest out.txt` checks a
 built exe without a screen.
 
 ## Running and building

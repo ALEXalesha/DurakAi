@@ -127,16 +127,20 @@ class Evaluator:
 class Exact:
     """Минимакс с запоминанием для двоих при пустой колоде - карты всех известны.
     Значения -1/0/1; ветка обрывается, как только найден выигрыш. Если узлов больше
-    node_limit - отказ (None), и решает обычный поиск."""
+    node_limit, поднят флаг stop или прошёл срок deadline (time.perf_counter) - отказ
+    (None), и решает обычный поиск. Флаг и срок смотрятся каждые 64 узла: без них перебор
+    шёл до 2.8 с при пределе хода 1.5 с, и закрытие окна могло не уложиться в 2 с."""
 
     def __init__(self, node_limit=20000):
         self.node_limit = node_limit
 
-    def solve(self, s, me):
+    def solve(self, s, me, stop=None, deadline=None):
         self.memo = {}
         self.onpath = set()
         self.nodes = 0
         self.me = me
+        self.stop = stop
+        self.deadline = deadline
         try:
             scores = []
             for m in self._ordered(s):
@@ -169,6 +173,9 @@ class Exact:
             return 0.0
         self.nodes += 1
         if self.nodes > self.node_limit:
+            raise _TooBig
+        if self.nodes % 64 == 0 and ((self.stop is not None and self.stop.is_set()) or
+                                     (self.deadline is not None and time.perf_counter() > self.deadline)):
             raise _TooBig
         self.onpath.add(key)
         maximize = s.turn == self.me
@@ -239,13 +246,15 @@ class SearchAgent:
         """Оценка каждого допустимого хода: [(ход, средняя оценка от -1 до 1)]."""
         legal = list(obs.legal)
         me = obs.player
+        started = time.perf_counter()
         if self.exact is not None and exact_applicable(obs):
             hands = [0] * obs.n
             hands[me] = obs.hand
             opp = next(q for q in range(obs.n) if q != me and q not in obs.out)
             hands[opp] = obs.known[opp] | obs.unseen()
             s = state_from(obs, hands, [])
-            res = self.exact.solve(s, me)
+            deadline = started + self.time_limit if self.time_limit else None
+            res = self.exact.solve(s, me, stop=stop, deadline=deadline)
             if res is not None:
                 got = dict(res)
                 return [(m, got[m]) for m in legal]
@@ -253,7 +262,6 @@ class SearchAgent:
         P = tracker.belief(obs)
         total = np.zeros(len(legal))
         done = 0
-        started = time.perf_counter()
         for k in range(self.samples):
             if k >= 2 and ((stop is not None and stop.is_set()) or
                            (self.time_limit and time.perf_counter() - started > self.time_limit)):

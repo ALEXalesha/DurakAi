@@ -3,7 +3,6 @@
 Окно ему даёт оболочка (aikit.run_standalone или ИИ-Игротека). Тема и язык приходят из
 ctx и меняются на лету по ctx.changed. Файлы - только в ctx.data_dir.
 """
-import gc
 import json
 import os
 import random
@@ -121,7 +120,7 @@ class MenuPage(QWidget):
         self.note.setFixedWidth(620)
         col.addWidget(self.note, 0, Qt.AlignmentFlag.AlignHCenter)
         col.addSpacing(8)
-        self.play_button = button("", "menuPrimary", gw.start_game)
+        self.play_button = button("", "menuPrimary", lambda: gw.start_game())
         self.stats_button = button("", "menu", lambda: gw.show_page("stats"))
         self.settings_button = button("", "menu", lambda: gw.show_page("settings"))
         for b in (self.play_button, self.stats_button, self.settings_button):
@@ -234,7 +233,7 @@ class PlayPage(QWidget):
         col.addWidget(self.pause_button)
         col.addStretch(1)
         last = QHBoxLayout()
-        self.again_button = button("", "primary", gw.start_game)
+        self.again_button = button("", "primary", lambda: gw.start_game())
         self.menu_button = button("", None, lambda: gw.show_page("menu"))
         last.addWidget(self.again_button, 1)
         last.addWidget(self.menu_button, 1)
@@ -506,15 +505,16 @@ class SettingsPage(QWidget):
 class GameWidget(QWidget):
     def __init__(self, ctx):
         super().__init__()
-        # Всё созданное - в постоянное поколение сборщика мусора: полный проход посреди
-        # поиска держит GIL и окно замирает (урок ChessCheckersAi).
-        gc.freeze()
+        # gc.freeze() здесь нет: сборщик мусора общий на весь процесс, и в оболочке
+        # заморозка навсегда оставила бы в памяти и её объекты. Замер tools/gc_bench.py:
+        # без заморозки ни ходы ИИ, ни отклик окна не хуже (README, раздел о 1.0.0).
         self.ctx = ctx
         self.t = translator(ctx.lang)
         self.settings = st.Settings(SCHEMA, ctx.file("settings.json"))
         self.session = None
         self.token = 0
-        self.paused = False
+        self.paused = False           # пауза показа «ИИ против ИИ» (кнопка)
+        self.hidden = False           # оболочка спрятала вкладку: pause() / resume()
         self.thoughts = None
         self.last_fool = None
         self.rng = random.Random()
@@ -606,6 +606,23 @@ class GameWidget(QWidget):
         if self.session is not None:
             self.refresh(animate=False)
 
+    def pause(self):
+        """Оболочка спрятала вкладку (переключились на другую игру, свернули окно): ИИ
+        не думает и не ходит, таймеры стоят, полёт карт сразу кончается. Партия ждёт."""
+        if self.hidden:
+            return
+        self.hidden = True
+        self._invalidate()
+        self.play.table.finish_animation()
+
+    def resume(self):
+        """Вкладку показали снова: партия идёт дальше с того же места."""
+        if not self.hidden:
+            return
+        self.hidden = False
+        if self.session is not None and self.current_page() == "play":
+            self.after_change()
+
     def shutdown(self):
         """Окно закрывается: таймеры стоп, поиски остановить и дождаться (не дольше 2 с)."""
         self._invalidate()
@@ -620,7 +637,7 @@ class GameWidget(QWidget):
 
     def start_game(self, seed=None):
         s = self.settings
-        if seed is None:
+        if seed is None or isinstance(seed, bool):    # clicked(bool) кнопки - не зерно
             seed = self.rng.randrange(2 ** 31)
         first = None
         if s["first_rule"] == "after_fool" and self.last_fool is not None and self.last_fool[1] == s["players"]:
@@ -631,23 +648,26 @@ class GameWidget(QWidget):
         self.thoughts = None
         self.stack.setCurrentWidget(self.play)
         self._invalidate()
-        self.play.table.places = {}
+        self.play.table.start_deal()
         self.after_change()
 
-    def on_move_chosen(self, move):
+    def _human_may(self, move):
+        """Ход человека принимается только со стола: клавиши Пробел и T работают и в меню,
+        а партия там спрятана."""
         s = self.session
-        if s is None or not s.human_turn() or move not in s.legal():
-            return
-        self._apply(move)
+        return (s is not None and not self.hidden and self.current_page() == "play"
+                and s.human_turn() and move in s.legal())
+
+    def on_move_chosen(self, move):
+        if self._human_may(move):
+            self._apply(move)
 
     def on_pass(self):
-        s = self.session
-        if s is not None and s.human_turn() and MOVE_PASS in s.legal():
+        if self._human_may(MOVE_PASS):
             self._apply(MOVE_PASS)
 
     def on_take(self):
-        s = self.session
-        if s is not None and s.human_turn() and MOVE_TAKE in s.legal():
+        if self._human_may(MOVE_TAKE):
             self._apply(MOVE_TAKE)
 
     def _apply(self, move):
@@ -679,6 +699,8 @@ class GameWidget(QWidget):
         if s.over:
             self._finish()
             return
+        if self.hidden:                   # resume() запустит ход заново
+            return
         if s.human_turn():
             legal = s.legal()
             if legal == [MOVE_PASS]:          # подкинуть нечего - пас без вопроса
@@ -691,7 +713,7 @@ class GameWidget(QWidget):
         self.timer.start(self._delay())
 
     def _delay(self, short=False):
-        anim = self.settings["anim_ms"] if self.play.table.animating() else 0
+        anim = round(max(0.0, self.play.table.anim_left()) * 1000)   # сначала долетят карты
         base = 120 if short else self.settings["delay_ms"]
         return max(base, anim + 40)
 

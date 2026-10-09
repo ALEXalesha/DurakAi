@@ -61,9 +61,20 @@ class AiController(QObject):
         self._reap()
         job = _Job(token, kind, fn, self)
         job.done.connect(self.ready)
+        # Поток кончился - объект удаляется (в потоке окна). Без этого каждый ход ИИ
+        # оставлял дочерний QThread вместе с агентом и наблюдением: 0.9.0 копила их
+        # до закрытия окна, около 45 за партию вдвоём.
+        job.finished.connect(self._finished)
         self.jobs.append(job)
         job.start()
         return job
+
+    def _finished(self):
+        job = self.sender()
+        if job in self.jobs:
+            self.jobs.remove(job)
+        if job is not None:
+            job.deleteLater()
 
     def _reap(self):
         self.jobs = [j for j in self.jobs if j.isRunning()]

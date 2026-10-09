@@ -59,6 +59,53 @@ def test_exact_gives_up_when_too_big():
     assert Exact(node_limit=50).solve(s, s.turn) is None
 
 
+def _big_endgame():
+    s = State.new(Rules(), seed=3)
+    s.deck = []
+    s.trump_card = -1
+    return s
+
+
+def test_exact_listens_to_stop_and_deadline():
+    """Точный перебор не держит поток дольше флага остановки и срока хода."""
+    s = _big_endgame()
+    flag = threading.Event()
+    flag.set()
+    t0 = time.perf_counter()
+    assert Exact(node_limit=10 ** 9).solve(s, s.turn, stop=flag) is None
+    assert Exact(node_limit=10 ** 9).solve(s, s.turn, deadline=time.perf_counter() - 1) is None
+    assert time.perf_counter() - t0 < 1.0
+    # без флага и срока тот же перебор идёт дольше 64 узлов - значит, проверка была нужна
+    e = Exact(node_limit=200)
+    assert e.solve(s, s.turn) is None and e.nodes > 64
+
+
+def _real_endgame():
+    """Настоящий конец партии вдвоём: колода пуста, карт на руках побольше."""
+    bot = NoviceAgent()
+    for seed in range(200):
+        s = State.new(Rules(), seed=seed)
+        while not s.over:
+            o = observation(s, s.turn)
+            if (not s.deck and exact_applicable(o) and len(o.legal) > 1
+                    and sum(h.bit_count() for h in s.hands) >= 10):
+                return s, o
+            s.apply(bot.choose(o))
+    raise AssertionError("нет подходящего конца партии")
+
+
+def test_search_with_exact_stops_quickly():
+    s, o = _real_endgame()
+    flag = threading.Event()
+    flag.set()
+    agent = SearchAgent(samples=24, use_net=False, exact=True, node_limit=10 ** 9)
+    t0 = time.perf_counter()
+    res = agent.analyze(o, stop=flag)
+    assert time.perf_counter() - t0 < 1.0
+    assert [m for m, _ in res] == list(o.legal)
+    assert agent.exact.nodes <= 64                    # перебор оборван (весь - сотни узлов)
+
+
 def test_same_observation_same_seed_same_move():
     s = random_position(21, 3, True)
     o = observation(s, s.turn)

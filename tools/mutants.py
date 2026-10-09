@@ -119,3 +119,33 @@ MUTANTS += [
     ("passport: другой поиск у сильного", "game/ai/search.py", '"strong": dict(samples=24, use_net=True, exact=True)',
      '"strong": dict(samples=20, use_net=True, exact=True)', "tests/test_passport.py"),
 ]
+MUTANTS += [
+    ("ui: gc.freeze вернулся", W, "        self.ctx = ctx\n        self.t = translator(ctx.lang)",
+     "        __import__('gc').freeze()\n        self.ctx = ctx\n        self.t = translator(ctx.lang)", TU),
+    ("ui: pause не останавливает ИИ", W, "        self.hidden = True\n        self._invalidate()\n",
+     "        self.hidden = True\n", TU),
+    ("ui: resume не продолжает", W,
+     "        if self.session is not None and self.current_page() == \"play\":\n            self.after_change()",
+     "        pass", TU),
+    ("ui: скрытая игра ходит", W, "        if self.hidden:                   # resume() запустит ход заново\n            return\n",
+     "", TU),
+    ("ui: поток ИИ не удаляется", AT, "            job.deleteLater()", "            pass", TU),
+]
+MUTANTS += [
+    ("search: перебор не слышит стоп", S,
+     "        if self.nodes % 64 == 0 and ((self.stop is not None and self.stop.is_set()) or",
+     "        if self.nodes % 64 == 0 and ((False) or", TS),
+    ("search: перебор без срока", S,
+     "                                     (self.deadline is not None and time.perf_counter() > self.deadline)):",
+     "                                     (False)):", TS),
+    ("ui: кнопка даёт зерно False", W, "        if seed is None or isinstance(seed, bool):", "        if seed is None:", TU),
+    ("ui: клавиши ходят вне стола", W,
+     "        return (s is not None and not self.hidden and self.current_page() == \"play\"",
+     "        return (s is not None", TU),
+]
+MUTANTS += [
+    ("ui: раздача без полёта", TBL, "        if self.deal_next:\n            self.deal_next = False\n",
+     "        if False:\n            self.deal_next = False\n", TU),
+    ("ui: ИИ не ждёт очередь карт", W, "        anim = round(max(0.0, self.play.table.anim_left()) * 1000)",
+     "        anim = self.settings[\"anim_ms\"] if self.play.table.animating() else 0", TU),
+]

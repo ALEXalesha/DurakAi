@@ -340,3 +340,215 @@ def test_first_rule_after_fool(app, win):
 
 def test_take_move_constant():
     assert MOVE_TAKE[0] == 3
+
+
+# --- жизнь во вкладке оболочки: сборщик мусора, pause() / resume() ---
+
+
+def _gc_state():
+    import gc
+    return gc.get_freeze_count(), gc.isenabled(), gc.get_threshold()
+
+
+def test_widget_leaves_garbage_collector_alone(app, tmp_path):
+    """Сборщик мусора общий на весь процесс: игра во вкладке оболочки не должна ни
+    замораживать объекты (gc.freeze навсегда оставил бы в памяти и объекты оболочки), ни
+    выключать сборщик, ни менять его пороги. 0.9.0 звала gc.freeze() в __init__."""
+    from aikit.host import make_window
+    before = _gc_state()
+    w, ctx = make_window(GAME_INFO, create_widget, APP_NAME, root=str(tmp_path / "home"))
+    w.show()
+    g = w.game
+    g.change("anim_ms", 0)
+    g.change("delay_ms", 0)
+    g.change("level", "novice")
+    g.change("mode", "demo")
+    g.start_game(seed=4)
+    assert wait(app, lambda: len(g.session.moves) >= 6, 30)
+    assert g.shutdown()
+    w.close()
+    assert _gc_state() == before
+
+
+def test_game_code_never_touches_gc():
+    """Закон на весь код игры, а не только на окно: ни одного gc.freeze / disable /
+    set_threshold в game/ и aikit/."""
+    import ast
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    bad = []
+    for top in ("game", "aikit"):
+        for folder, _, files in os.walk(os.path.join(root, top)):
+            for name in files:
+                if not name.endswith(".py"):
+                    continue
+                path = os.path.join(folder, name)
+                tree = ast.parse(open(path, encoding="utf-8").read())
+                for node in ast.walk(tree):
+                    if (isinstance(node, ast.Attribute) and node.attr in ("freeze", "unfreeze", "disable", "set_threshold")
+                            and isinstance(node.value, ast.Name) and node.value.id == "gc"):
+                        bad.append(f"{os.path.relpath(path, root)}:{node.lineno} gc.{node.attr}")
+    assert not bad, bad
+
+
+def _demo(g, level="novice", seed=9):
+    g.change("mode", "demo")
+    g.change("level", level)
+    g.change("players", 3)
+    g.start_game(seed=seed)
+
+
+def test_pause_stops_everything_and_resume_continues(app, win):
+    g = win.game
+    g.change("anim_ms", 200)
+    _demo(g)
+    assert wait(app, lambda: len(g.session.moves) >= 4, 30)
+    g.pause()
+    g.pause()                                   # второй раз - ничего не ломает
+    n = len(g.session.moves)
+    assert not g.timer.isActive() and not g.play.table.timer.isActive()
+    assert not g.play.table.flights
+    end = time.time() + 0.8
+    while time.time() < end:                    # таймеры и потоки за это время не ходят
+        app.processEvents()
+        time.sleep(0.005)
+    assert len(g.session.moves) == n
+    g.change("show_thoughts", True)             # перерисовка скрытой вкладки не будит ИИ
+    g.ctx.set_lang("en")
+    for _ in range(50):
+        app.processEvents()
+        time.sleep(0.005)
+    assert len(g.session.moves) == n and not g.timer.isActive()
+    g.ctx.set_lang("ru")
+    g.change("show_thoughts", False)
+    assert wait(app, lambda: not g.ai.busy(), 5)
+    assert g.current_page() == "play"
+    g.resume()
+    g.resume()
+    g.change("anim_ms", 0)
+    assert wait(app, lambda: len(g.session.moves) >= n + 4, 30)   # партия пошла дальше
+    g.change("mode", "play")
+    g.change("players", 2)
+
+
+def test_pause_while_ai_thinks_drops_its_answer(app, win):
+    g = win.game
+    _demo(g, level="strong", seed=13)
+    assert wait(app, lambda: g.ai.busy(), 10)
+    n = len(g.session.moves)
+    g.pause()
+    assert wait(app, lambda: not g.ai.busy(), 3)    # поиск остановлен флагом, не досчитывается
+    end = time.time() + 0.5
+    while time.time() < end:
+        app.processEvents()
+        time.sleep(0.005)
+    assert len(g.session.moves) == n
+    g.resume()
+    assert wait(app, lambda: len(g.session.moves) > n, 30)
+    assert g.shutdown()
+    g.change("mode", "play")
+    g.change("players", 2)
+
+
+def test_pause_on_human_turn_keeps_the_position(app, win):
+    g = win.game
+    g.change("level", "novice")
+    g.start_game(seed=5)
+    assert wait(app, lambda: g.session.human_turn(), 30)
+    before = (len(g.session.moves), g.session.state.turn)
+    g.pause()
+    for _ in range(20):
+        app.processEvents()
+    g.resume()
+    assert (len(g.session.moves), g.session.state.turn) == before
+    assert g.session.human_turn()
+    play_out(app, g)
+
+
+def test_resume_in_menu_does_not_start_a_game(app, win):
+    g = win.game
+    g.pause()
+    g.resume()
+    assert g.current_page() == "menu" and g.session is None
+
+
+def test_finished_ai_threads_are_deleted(app, win):
+    """Каждый запрос к ИИ - свой QThread. Кончившийся поток удаляется, а не копится
+    дочерним объектом до закрытия окна (0.9.0: ~45 за партию вдвоём вместе с агентами)."""
+    from PySide6.QtCore import QCoreApplication, QEvent, QThread
+    g = win.game
+    g.change("mode", "demo")
+    g.change("level", "novice")
+    g.start_game(seed=8)
+    assert wait(app, lambda: g.session.over, 60)
+    assert len(g.session.moves) > 20
+    assert wait(app, lambda: not g.ai.busy(), 5)
+    for _ in range(5):
+        app.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert len(g.ai.findChildren(QThread)) <= 1
+    assert not g.ai.jobs
+    g.change("mode", "play")
+
+
+def test_play_button_deals_a_new_hand_each_time(app, win):
+    """Кнопки «Играть» и «Новая партия»: clicked(bool) не должен стать зерном. 0.9.0 звала
+    start_game(False), и каждая партия с кнопки шла с одной и той же раздачей (зерно 0)."""
+    g = win.game
+    g.change("level", "novice")
+    deals = set()
+    for b in (g.menu.play_button, g.play.again_button, g.menu.play_button, g.play.again_button):
+        g.show_page("menu")
+        b.click()
+        assert g.current_page() == "play"
+        st_ = g.session.state
+        assert g.session.seed is not False
+        deals.add((tuple(st_.hands), st_.trump))
+    assert len(deals) == 4
+
+
+def test_hotkeys_do_nothing_off_the_table(app, win):
+    """Пробел (Бито/Пас) и T (Беру) - только на столе: из меню, статистики и настроек они
+    не ходят за человека в спрятанной партии."""
+    g = win.game
+    g.change("level", "novice")
+    for seed in range(40):
+        g.start_game(seed=seed)
+        if wait(app, lambda: g.session.human_turn(), 30) and MOVE_TAKE in g.session.legal():
+            break
+    else:
+        pytest.fail("нет раздачи, где человек отбивается")
+    for page in ("menu", "stats", "settings"):
+        g.show_page(page)
+        n = len(g.session.moves)
+        g.on_take()
+        g.on_pass()
+        for _ in range(20):
+            app.processEvents()
+        assert len(g.session.moves) == n, page
+    g.show_page("play")
+    g.on_take()
+    assert len(g.session.moves) == n + 1
+
+
+def test_deal_flies_from_the_deck_and_ai_waits_for_it(app, win):
+    """Раздача анимирована (spec §5): каждая карта на руках летит из колоды, и первый ход
+    ИИ не начинается, пока карты летят."""
+    g = win.game
+    g.change("anim_ms", 300)
+    g.change("level", "novice")
+    g.change("mode", "demo")
+    g.change("players", 4)
+    g.start_game(seed=21)
+    t = g.play.table
+    hand_cards = {c for c, pl in t.places.items() if pl.z >= 30}
+    assert len(hand_cards) == 24
+    assert {f.card for f in t.flights} == hand_cards
+    deck = t.deck_rect()
+    assert all(abs(f.src.rect.x() - deck.x()) < 0.5 for f in t.flights)
+    left = t.anim_left()
+    assert left > 0.3 + 0.035 * 20                # очередь карт учтена
+    assert g.timer.remainingTime() >= (left - 0.1) * 1000
+    assert wait(app, lambda: not t.animating(), 5)
+    g.change("anim_ms", 0)
+    g.change("mode", "play")
+    g.change("players", 2)

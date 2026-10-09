@@ -69,6 +69,7 @@ class TableWidget(QWidget):
         self.scores = {}
         self.anim_ms = 250
         self.places = {}
+        self.deal_next = False        # следующая set_state - раздача: карты летят из колоды
         self.flights = []
         self.selected = -1
         self.hover = -1
@@ -99,6 +100,10 @@ class TableWidget(QWidget):
         if self.selected >= 0 and not any(m[1] == self.selected for m in self.legal):
             self.selected = -1
         self.places = self.compute_places()
+        if self.deal_next:
+            self.deal_next = False
+            deck = Place(self.deck_rect(), 0, False, 1)
+            old = {c: deck for c, pl in self.places.items() if pl.z >= 30}   # карты на руках
         if animate and self.anim_ms > 0 and old:
             now = time.monotonic()
             keep = [f for f in self.flights if now - f.start < f.dur]
@@ -117,9 +122,25 @@ class TableWidget(QWidget):
             self.flights = []
         self.update()
 
+    def start_deal(self):
+        """Новая партия: прошлые места забыты, розданные карты полетят из колоды."""
+        self.places = {}
+        self.deal_next = True
+
     def animating(self):
         now = time.monotonic()
         return any(now < f.start + f.dur for f in self.flights)
+
+    def anim_left(self):
+        """Секунд до конца последнего полёта (с учётом очереди карт), 0 - не летят."""
+        now = time.monotonic()
+        return max((f.start + f.dur - now for f in self.flights), default=0.0) if self.flights else 0.0
+
+    def finish_animation(self):
+        """Карты сразу на своих местах (вкладку спрятали - лететь некому смотреть)."""
+        self.flights = []
+        self.timer.stop()
+        self.update()
 
     def _tick(self):
         if not self.animating():

@@ -161,3 +161,21 @@ MUTANTS += [
      "        if s.mode == \"play\" and self.settings[\"show_thoughts\"]:\n", "        if False:\n", TU),
     ("ui: новичок без правил", AT, "            if level == \"novice\":", "            if False:", TU),
 ]
+HI = "game/ui/history.py"
+CH = "game/ui/charts.py"
+TC = "tests/test_charts.py"
+MUTANTS += [
+    ("charts: окно скользящего среднего на 1 шире", HI, "if window is not None and k >= window:",
+     "if window is not None and k > window:", TC),
+    ("charts: доли по уровням не делятся", HI,
+     "series = [(o, [count[lv][o] / sum(count[lv].values()) for lv in groups])",
+     "series = [(o, [count[lv][o] / 1 for lv in groups])", TC),
+    ("charts: пустой график без надписи", CH, "        if not self.has_data():\n            self.empty(p)\n            p.end()\n            return\n        series = ",
+     "        if not self.has_data():\n            p.end()\n            return\n        series = ", TC),
+    ("charts: журнал теряет номер партии", HI, "            self.next = max(last + 1, raw[\"next\"] if is_int(raw.get(\"next\")) else 1)",
+     "            self.next = 1", TC),
+    ("ui: партия не идёт в журнал", W, "                self.history.record({", "                ({", TU),
+    ("ui: графики не меняют тему", W, "        for chart in self.stats.charts:\n            chart.set_theme(self.ctx.theme)\n",
+     "", TU),
+    ("charts: разница карт без знака", HI, "        return -left[human]", "        return left[human]", TC),
+]

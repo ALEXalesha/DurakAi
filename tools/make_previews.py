@@ -55,6 +55,14 @@ def main(out):
     g = window.game
     bot = NoviceAgent()
     shots = []
+    # настоящие партии для графиков статистики: бот-новичок за человека против среднего ИИ
+    g.change("anim_ms", 0)
+    g.change("delay_ms", 0)
+    g.change("players", 2)
+    for k in range(16):
+        g.change("level", ("medium", "novice", "strong")[k % 3])
+        g.start_game(seed=200 + k)
+        play_until(app, g, lambda s: False, bot)
     for theme_name in ("dark", "light"):
         ctx.set_theme(theme_name)
         suffix = "" if theme_name == "dark" else "_light"
@@ -94,6 +102,9 @@ def main(out):
         g.show_page("stats")
         settle(app, g, 200)
         shots.append((window.grab(), f"preview_stats{suffix}.png"))
+        charts_card = g.stats.share_chart.parentWidget()
+        charts_card.resize(1180, charts_card.sizeHint().height())
+        shots.append((charts_card.grab(), f"preview_charts{suffix}.png"))
     # картинка для списка игр в ИИ-Игротеке: 16:9
     ctx.set_theme("dark")
     window.resize(1280, 720)

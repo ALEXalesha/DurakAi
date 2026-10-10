@@ -642,3 +642,69 @@ def test_thoughts_panel_is_never_empty(app, win, mode, level):
     assert not unseen, f"в показе ИИ сходил раньше, чем показал мысли: {len(unseen)} раз"
     g.change("show_thoughts", False)
     g.change("mode", "play")
+
+
+# --- графики статистики (правило автора 10.10: графики во всех играх с ИИ) ---
+
+
+def _charts(g):
+    from game.ui.charts import BarChart, LineChart
+    page = g.stats
+    return {"share": page.share_chart, "levels": page.levels_chart, "moves": page.moves_chart,
+            "margin": page.margin_chart, "passport": page.passport_chart}, (BarChart, LineChart)
+
+
+def test_stats_page_has_charts_and_words_when_empty(app, win):
+    g = win.game
+    g.show_page("stats")
+    cs, kinds = _charts(g)
+    for name, c in cs.items():
+        assert isinstance(c, kinds) and c.isVisibleTo(g.stats), name
+        assert c.title, name
+        if name != "passport":
+            assert not c.has_data() and c.empty_text, f"{name}: пустой холст без надписи"
+    assert cs["passport"].has_data()                 # паспорт есть всегда
+    g.grab()
+
+
+def test_finished_game_goes_to_history_and_charts(app, win):
+    g = win.game
+    g.change("level", "novice")
+    g.start_game(seed=3)
+    play_out(app, g)
+    games = g.history.games
+    assert len(games) == 1
+    rec = games[0]
+    s = g.session
+    assert rec["outcome"] == s.outcome_for_human() and rec["moves"] == len(s.moves)
+    assert rec["level"] == "novice" and rec["players"] == 2
+    left = {q: s.state.hands[q].bit_count() for q in range(s.n)}
+    expect = {"win": left[s.state.fool] if s.state.fool >= 0 else 0, "loss": -left[0], "draw": 0}[rec["outcome"]]
+    assert rec["margin"] == expect
+    for i in range(30):                              # ещё партии - сразу в журнал
+        g.history.record({"players": 3, "level": "strong", "outcome": ("win", "loss", "draw")[i % 3],
+                          "moves": 50 + i, "margin": (i % 7) - 3})
+    g.show_page("stats")
+    cs, _ = _charts(g)
+    for name in ("share", "levels", "moves", "margin"):
+        assert cs[name].has_data(), name
+    assert cs["levels"].groups == [g.t("novice"), g.t("strong")]
+    assert len(cs["share"].points) == 31 and len(cs["share"].second) == 31
+    assert cs["moves"].points[-1] == (31.0, 79.0)
+    g.ctx.set_theme("light")
+    assert all(c.theme == "light" for c in cs.values())
+    g.ctx.set_theme("dark")
+
+
+def test_peeked_and_demo_games_stay_out_of_history(app, win):
+    g = win.game
+    g.change("level", "novice")
+    g.change("reveal", True)
+    g.start_game(seed=3)
+    play_out(app, g)
+    g.change("reveal", False)
+    g.change("mode", "demo")
+    g.start_game(seed=2)
+    assert wait(app, lambda: g.session.over, 60)
+    g.change("mode", "play")
+    assert g.history.games == []

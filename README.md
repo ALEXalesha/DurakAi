@@ -28,6 +28,15 @@ discard pile, trump, deck size, card counts, who picked up what).
 - **AI thoughts** (the checkbox on the right of the table): a 4 × 9 grid per opponent and for the deck with the probability of each card, and the score of each move. Against the AI this is your card tracking and the strong AI's score of your moves; on the AI's turn its thoughts stay hidden and the grid follows your observation. In the AI vs AI demo it shows the thoughts of the AI to move; for the novice, instead of scores, a "plays by the rules" line with the move the rules choose. A line above the grid always says whose turn it is and whose thoughts these are.
 
 <img src="docs/preview_thoughts.png" width="880" alt="AI vs AI demo: on the right, the thoughts of the AI to move - where it thinks the opponent's cards are and the score of each of its moves">
+- **Statistics with charts**: win share by game (moving average over 20 games and over all),
+  results against each AI level, game length in moves, the card difference at the end (plus is
+  how many cards the fool kept when you got out, minus is how many you kept) and AI strength
+  from the model passport. Charts are drawn with QPainter, no matplotlib; with no data yet a
+  card says where the data will come from. Games for the charts go to `games.json` next to
+  the statistics, only those that count (no peeking, not the demo).
+
+<img src="docs/preview_charts.png" width="880" alt="Statistics charts: win share, results by level, game length, card difference, AI strength from the passport">
+
 - Cards are drawn by our own code (suits are built from circles and polygons); no third-party decks.
 - Paint themes (dark and light) with a matching table cloth, Russian and English, the window reopens where it was closed.
 
@@ -151,10 +160,10 @@ less than 16 ms, one Windows timer tick. The freeze cost the shell memory for go
 
 ## Tests
 
-236 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
+254 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
 AI waits have timeouts. Rules are covered by hand-built deals for every rule plus
 property tests on random games (all 36 cards always accounted for). `tools/mutate.py`
-breaks the product on purpose in 72 places (rules, honesty, tracking, search, network,
+breaks the product on purpose in 79 places (rules, honesty, tracking, search, network,
 training, window, and since 1.0.0 life in a tab: collector, pause, threads, deal) - every
 mutant is caught. `python main.py --selftest out.txt` checks a
 built exe without a screen.

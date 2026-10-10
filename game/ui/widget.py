@@ -19,7 +19,9 @@ from aikit.widgets import Combo, button, card, label, restyle, segmented
 from game.ai import tracker
 from game.ai.agents import LEVELS
 from game.core.durak import DRAW, MOVE_PASS, MOVE_TAKE, TRANSFER
+from game.ui import history as hist
 from game.ui.ai_thread import AiController
+from game.ui.charts import BarChart, LineChart
 from game.ui.i18n import translator
 from game.ui.session import Session
 from game.ui.table import TableWidget
@@ -330,6 +332,28 @@ class StatsPage(QWidget):
         self.table = table_widget(6)
         mc.addWidget(self.table)
         col.addWidget(mine)
+        # графики: доля побед по партиям, итоги по уровням, длина партии, разница карт,
+        # сила ИИ по паспорту (правило автора 10.10 - графики во всех играх с ИИ)
+        gc_ = card()
+        gl = QVBoxLayout(gc_)
+        gl.setContentsMargins(18, 14, 18, 14)
+        gl.setSpacing(10)
+        self.charts_title = label("", "section")
+        gl.addWidget(self.charts_title)
+        self.share_chart = LineChart(percent=True)
+        self.levels_chart = BarChart()
+        self.moves_chart = LineChart(percent=False)
+        self.margin_chart = LineChart(percent=False)
+        self.passport_chart = BarChart()
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        for i, w in enumerate((self.share_chart, self.levels_chart, self.moves_chart, self.margin_chart)):
+            grid.addWidget(w, i // 2, i % 2)
+        gl.addLayout(grid)
+        gl.addWidget(self.passport_chart)
+        self.charts = (self.share_chart, self.levels_chart, self.moves_chart, self.margin_chart,
+                       self.passport_chart)
+        col.addWidget(gc_)
         pc = card()
         lay = QVBoxLayout(pc)
         lay.setContentsMargins(18, 14, 18, 14)
@@ -342,8 +366,38 @@ class StatsPage(QWidget):
         col.addWidget(pc)
         col.addStretch(1)
 
+    def refresh_charts(self):
+        t = self.gw.t
+        games = self.gw.history.games
+        self.charts_title.setText(t("charts"))
+        for c in self.charts:
+            c.set_theme(self.gw.ctx.theme)
+        self.share_chart.set_texts(t("ch_share"), t("ch_share_empty"))
+        self.share_chart.x_label = t("ch_game_no")
+        self.share_chart.names = (t("ch_last20"), t("ch_all"))
+        self.share_chart.set_points(hist.rolling_share(games, 20), hist.rolling_share(games, None))
+        self.levels_chart.set_texts(t("ch_levels"), t("ch_levels_empty"))
+        groups, series = hist.by_level(games)
+        colour = {"win": "good", "draw": "warn", "loss": "bad"}
+        self.levels_chart.set_data([t(lv) for lv in groups],
+                                   [(t("ch_" + o), colour[o], vals) for o, vals in series])
+        self.moves_chart.set_texts(t("ch_moves"), t("ch_moves_empty"))
+        self.moves_chart.x_label = t("ch_game_no")
+        self.moves_chart.set_points(hist.series(games, "moves"))
+        self.margin_chart.set_texts(t("ch_margin"), t("ch_margin_empty"))
+        self.margin_chart.x_label = t("ch_game_no")
+        self.margin_chart.set_points(hist.series(games, "margin"))
+        self.passport_chart.set_texts(t("ch_passport"), t("not_trained"))
+        try:
+            checks = [c for c in load_passport()["checks"] if c["players"] == 2]
+        except (OSError, ValueError, KeyError, TypeError):
+            checks = []
+        self.passport_chart.set_data([f"{t(c['level'])} {t('check_' + c['check'])}" for c in checks],
+                                     [(t("ch_score"), "accent", [c["score"] for c in checks])] if checks else [])
+
     def refresh(self):
         t = self.gw.t
+        self.refresh_charts()
         self.heading.setText(t("stats_title"))
         self.menu_button.setText(t("menu"))
         self.mine_title.setText(t("your_games"))
@@ -515,6 +569,7 @@ class GameWidget(QWidget):
         self.ctx = ctx
         self.t = translator(ctx.lang)
         self.settings = st.Settings(SCHEMA, ctx.file("settings.json"))
+        self.history = hist.GameLog(ctx.file("games.json"))     # для графиков статистики
         self.session = None
         self.token = 0
         self.paused = False           # пауза показа «ИИ против ИИ» (кнопка)
@@ -598,6 +653,8 @@ class GameWidget(QWidget):
         self.play.grid.set_theme(self.ctx.theme, self.ctx.lang)
         for combo in self.findChildren(Combo):
             combo.set_arrow_color(c["text"])
+        for chart in self.stats.charts:
+            chart.set_theme(self.ctx.theme)
         self.update()
 
     def retranslate(self):
@@ -780,6 +837,10 @@ class GameWidget(QWidget):
         if outcome and not s.recorded:
             if not s.peeked:
                 self.ctx.stats.record(s.stats_key(), outcome)
+                st_ = s.state
+                margin = hist.margin([h.bit_count() for h in st_.hands], st_.fool, s.human, outcome)
+                self.history.record({"players": s.n, "level": s.level, "outcome": outcome,
+                                     "moves": len(s.moves), "margin": margin})
             s.recorded = True
             self.ctx.sound.play(outcome)
 

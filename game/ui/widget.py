@@ -120,6 +120,7 @@ class MenuPage(QWidget):
         self.note.setFixedWidth(620)
         col.addWidget(self.note, 0, Qt.AlignmentFlag.AlignHCenter)
         col.addSpacing(8)
+        # lambda: иначе clicked(bool) пришёл бы в start_game зерном False
         self.play_button = button("", "menuPrimary", lambda: gw.start_game())
         self.stats_button = button("", "menu", lambda: gw.show_page("stats"))
         self.settings_button = button("", "menu", lambda: gw.show_page("settings"))
@@ -637,7 +638,7 @@ class GameWidget(QWidget):
 
     def start_game(self, seed=None):
         s = self.settings
-        if seed is None or isinstance(seed, bool):    # clicked(bool) кнопки - не зерно
+        if seed is None:
             seed = self.rng.randrange(2 ** 31)
         first = None
         if s["first_rule"] == "after_fool" and self.last_fool is not None and self.last_fool[1] == s["players"]:

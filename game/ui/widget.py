@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFrame, QGridLayout
 from aikit import settings as st
 from aikit import theme
 from aikit.widgets import Combo, button, card, label, restyle, segmented
+from game.ai import tracker
 from game.ai.agents import LEVELS
 from game.core.durak import DRAW, MOVE_PASS, MOVE_TAKE, TRANSFER
 from game.ui.ai_thread import AiController
@@ -214,6 +215,8 @@ class PlayPage(QWidget):
         col.addWidget(self.thoughts_box)
         self.thoughts_hint = label("", "hint", wrap=True)
         col.addWidget(self.thoughts_hint)
+        self.thoughts_text = label("", "muted", wrap=True)    # чей ход и чьи это мысли
+        col.addWidget(self.thoughts_text)
         self.grid = ProbGrid()
         col.addWidget(self.grid)
         self.moves_caption = label("", "muted")
@@ -517,6 +520,7 @@ class GameWidget(QWidget):
         self.paused = False           # пауза показа «ИИ против ИИ» (кнопка)
         self.hidden = False           # оболочка спрятала вкладку: pause() / resume()
         self.thoughts = None
+        self.thoughts_token = -1
         self.last_fool = None
         self.rng = random.Random()
         self.ai = AiController(self)
@@ -675,7 +679,7 @@ class GameWidget(QWidget):
         s = self.session
         s.apply(move)
         self.ctx.sound.play("capture" if move == MOVE_TAKE else "move")
-        self.thoughts = None
+        # прошлые мысли остаются на панели, пока не придут новые: панель не мигает пустой
         self.after_change()
 
     def names(self):
@@ -709,6 +713,10 @@ class GameWidget(QWidget):
             elif self.settings["show_thoughts"]:
                 self.ai.request_thoughts(self.token, s.obs(s.human), self.rng.randrange(2 ** 31))
             return
+        if s.mode == "play" and self.settings["show_thoughts"]:
+            # ходит ИИ: его мысли не показываются (по ним читалась бы рука), а ваш учёт
+            # карт обновляется - ходов у вас нет, поэтому это только сетка, быстро
+            self.ai.request_thoughts(self.token, s.obs(s.human), self.rng.randrange(2 ** 31))
         if s.mode == "demo" and self.paused:
             return
         self.timer.start(self._delay())
@@ -727,15 +735,27 @@ class GameWidget(QWidget):
                 self._apply(MOVE_PASS)
             return
         legal = s.legal()
+        p = s.state.turn
+        demo_thoughts = s.mode == "demo" and self.settings["show_thoughts"]
         if len(legal) == 1:
+            if demo_thoughts:            # учёт карт считается за 2 мс - прямо здесь
+                obs = s.obs(p)
+                self._set_thoughts({"player": p, "belief": tracker.belief(obs), "scores": [],
+                                    "forced": legal[0]})
             self._apply(legal[0])
             return
-        p = s.state.turn
         self.refresh(animate=False)
         obs = s.obs(p)
-        if s.mode == "demo" and self.settings["show_thoughts"]:
-            self.ai.request_thoughts(self.token, obs, self.rng.randrange(2 ** 31))
+        if demo_thoughts:
+            # Сначала мысли, потом ход: иначе ход приходил раньше и мысли выбрасывались
+            # как устаревшие - панель в показе была пустой (17 из 17 у новичка).
+            self.ai.request_thoughts(self.token, obs, self.rng.randrange(2 ** 31), level=s.level)
+            return
         self.ai.request_move(self.token, obs, s.level, self.rng.randrange(2 ** 31))
+
+    def _set_thoughts(self, payload):
+        self.thoughts = payload
+        self.thoughts_token = self.token
 
     def on_ai(self, token, kind, payload):
         if token != self.token or self.session is None:
@@ -745,8 +765,10 @@ class GameWidget(QWidget):
             self.play.info.setText(self.t("error", e=payload))
             return
         if kind == "thoughts":
-            self.thoughts = payload
+            self._set_thoughts(payload)
             self.refresh(animate=False)
+            if s.mode == "demo" and s.ai_turn() and payload["player"] == s.state.turn:
+                self.ai.request_move(self.token, s.obs(s.state.turn), s.level, self.rng.randrange(2 ** 31))
             return
         if s.ai_turn() and payload in s.legal():
             self._apply(payload)
@@ -760,6 +782,36 @@ class GameWidget(QWidget):
                 self.ctx.stats.record(s.stats_key(), outcome)
             s.recorded = True
             self.ctx.sound.play(outcome)
+
+    def _thoughts_note(self, th, names):
+        """Чьи это мысли и что в них: новичок, единственный ход или поиск с оценками."""
+        t = self.t
+        name = names[th["player"]]
+        if th.get("forced") is not None:
+            return t("th_forced", name=name, move=move_text(t, th["forced"], self.ctx.lang))
+        if "novice" in th:
+            move = move_text(t, th["novice"], self.ctx.lang) if th["novice"] is not None else "-"
+            return t("th_novice", name=name, rules=t("th_rules"), move=move)
+        return t("th_demo", name=name)
+
+    def _thoughts_line(self, th, names):
+        """Текст над сеткой «Мыслей ИИ»: никогда не пустой, пока выключатель включён."""
+        t = self.t
+        s = self.session
+        st_ = s.state
+        if st_.over:
+            return t("th_over")
+        fresh = th is not None and self.thoughts_token == self.token
+        if s.mode == "demo":
+            if fresh and th["player"] == st_.turn:
+                return self._thoughts_note(th, names)
+            line = t("th_wait", name=names[st_.turn])
+            if th is not None:
+                line += " " + t("th_last") + " " + self._thoughts_note(th, names)
+            return line
+        if s.human_turn():
+            return t("th_mine") if fresh else t("th_wait_mine")
+        return t("th_ai_turn", name=names[st_.turn])
 
     def toggle_pause(self):
         self.paused = not self.paused
@@ -863,8 +915,12 @@ class GameWidget(QWidget):
             pp.grid.set_data([], st_.trump)
             pp.moves.clear()
         pp.grid.setVisible(show and th is not None)
-        pp.moves.setVisible(show and th is not None)
-        pp.moves_caption.setVisible(show and th is not None)
+        has_scores = th is not None and bool(th["scores"])
+        pp.moves.setVisible(show and has_scores)
+        pp.moves_caption.setVisible(show and has_scores)
+        pp.thoughts_text.setVisible(show)
+        if show:
+            pp.thoughts_text.setText(self._thoughts_line(th, names))
         pp.reveal_box.setVisible(not demo)
         pp.reveal_hint.setVisible(not demo and self.settings["reveal"])
         pp.reveal_box.blockSignals(True)

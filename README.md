@@ -25,7 +25,9 @@ discard pile, trump, deck size, card counts, who picked up what).
   throw in only when everything on the table is beaten or the defender has said "take".
 - **2 to 4 players**: one human, the rest are AI.
 - Three AI levels: **novice**, **medium**, **strong**, plus an **AI vs AI** demo with open cards.
-- **AI thoughts**: a 4 × 9 grid per opponent and for the deck with the probability of each card, and the strong AI's score of each of your moves.
+- **AI thoughts** (the checkbox on the right of the table): a 4 × 9 grid per opponent and for the deck with the probability of each card, and the score of each move. Against the AI this is your card tracking and the strong AI's score of your moves; on the AI's turn its thoughts stay hidden and the grid follows your observation. In the AI vs AI demo it shows the thoughts of the AI to move; for the novice, instead of scores, a "plays by the rules" line with the move the rules choose. A line above the grid always says whose turn it is and whose thoughts these are.
+
+<img src="docs/preview_thoughts.png" width="880" alt="AI vs AI demo: on the right, the thoughts of the AI to move - where it thinks the opponent's cards are and the score of each of its moves">
 - Cards are drawn by our own code (suits are built from circles and polygons); no third-party decks.
 - Paint themes (dark and light) with a matching table cloth, Russian and English, the window reopens where it was closed.
 
@@ -110,6 +112,7 @@ a tab next to other games for the first time. Found and fixed, each with a test 
 | Space and T worked on every page | From the menu, stats or settings they played "Done" or "Take" for the human in the hidden game, which then played out in the background and went into the stats | Human moves are accepted only on the table page |
 | The exact endgame solver ignored the stop flag and the move time limit | The strong AI thought up to 2.8 s with a 1.5 s limit, and closing the window could miss the 2 s contract | The flag and the deadline are checked every 64 nodes, then regular search takes over |
 | No deal animation (spec §5) | Cards appeared in the hands at once | Cards fly from the deck one after another; the AI's first move waits for the last one |
+| The "AI thoughts" panel was empty in the AI vs AI demo (reported by the author) | The AI move arrived before the thoughts, which were then dropped as stale: 17 of 17 answers for the novice, 16 of 16 for the medium level; for the strong level 14 got through but were wiped by the move at once - the grid was visible 0% of the time. Against the AI the panel also went blank on the AI's turn | In the demo thoughts come first, then the move; on the AI's turn your card tracking is updated; old thoughts stay until new ones arrive; a line above the grid says whose turn and whose thoughts, and the novice "plays by the rules". Test: with the checkbox on, the panel is never empty in any mode at any level |
 | `tests/test_privacy.py` banned the origin host | In a clone from GitHub the origin is `github.com`, which the publish script legitimately contains: the check would fail on GitHub CI | Public hosts (github.com and similar) are not treated as private |
 
 **Pause in a tab.** The shell calls `pause()` when a tab is hidden and `resume()` when it is
@@ -148,10 +151,10 @@ less than 16 ms, one Windows timer tick. The freeze cost the shell memory for go
 
 ## Tests
 
-230 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
+236 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
 AI waits have timeouts. Rules are covered by hand-built deals for every rule plus
 property tests on random games (all 36 cards always accounted for). `tools/mutate.py`
-breaks the product on purpose in 68 places (rules, honesty, tracking, search, network,
+breaks the product on purpose in 72 places (rules, honesty, tracking, search, network,
 training, window, and since 1.0.0 life in a tab: collector, pause, threads, deal) - every
 mutant is caught. `python main.py --selftest out.txt` checks a
 built exe without a screen.

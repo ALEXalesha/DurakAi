@@ -71,6 +71,19 @@ def main(out):
         play_until(app, g, lambda s: s.human_turn() and s.state.table and s.state.bout >= 2, bot)
         settle(app, g, 2500)
         shots.append((window.grab(), f"preview_game2{suffix}.png"))
+        # «ИИ против ИИ» с «Мыслями ИИ»: кадр в тот миг, когда мысли к этому ходу пришли
+        g.change("mode", "demo")
+        g.start_game(seed=17)
+        end = time.time() + 90
+        while time.time() < end:
+            app.processEvents()
+            time.sleep(0.003)
+            th = g.thoughts
+            if (th is not None and g.thoughts_token == g.token and th["scores"]
+                    and len(g.session.moves) >= 6 and not g.play.table.animating()):
+                break
+        shots.append((window.grab(), f"preview_thoughts{suffix}.png"))
+        g.change("mode", "play")
         # вчетвером
         g.change("players", 4)
         g.change("show_thoughts", False)

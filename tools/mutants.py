@@ -108,8 +108,9 @@ TU = "tests/test_ui.py"
 MUTANTS += [
     ("ui: закрытые карты на своих местах", TBL, "face = self.reveal or (mine and self.viewer >= 0)",
      "face = True", TU),
-    ("ui: мысли за ИИ", W, "self.ai.request_thoughts(self.token, s.obs(s.human), self.rng.randrange(2 ** 31))",
-     "self.ai.request_thoughts(self.token, s.obs(1), self.rng.randrange(2 ** 31))", TU),
+    ("ui: мысли за ИИ", W,
+     "elif self.settings[\"show_thoughts\"]:\n                self.ai.request_thoughts(self.token, s.obs(s.human),",
+     "elif self.settings[\"show_thoughts\"]:\n                self.ai.request_thoughts(self.token, s.obs(1),", TU),
     ("ui: подглядывание не отмечается", W, "                self.session.peeked = True", "                pass", TU),
     ("ui: статистика не пишется", W, "            if not s.peeked:", "            if s.peeked:", TU),
     ("ui: потоки не ждут", AT, "            j.wait(left)", "            pass", TU),
@@ -150,4 +151,13 @@ MUTANTS += [
      "        if False:\n            self.deal_next = False\n", TU),
     ("ui: ИИ не ждёт очередь карт", W, "        anim = round(max(0.0, self.play.table.anim_left()) * 1000)",
      "        anim = self.settings[\"anim_ms\"] if self.play.table.animating() else 0", TU),
+]
+MUTANTS += [
+    ("ui: ход ИИ раньше мыслей", W,
+     "            self.ai.request_thoughts(self.token, obs, self.rng.randrange(2 ** 31), level=s.level)\n            return\n",
+     "            self.ai.request_thoughts(self.token, obs, self.rng.randrange(2 ** 31), level=s.level)\n", TU),
+    ("ui: текст мыслей скрыт", W, "        pp.thoughts_text.setVisible(show)", "        pp.thoughts_text.setVisible(False)", TU),
+    ("ui: на ходу ИИ учёт не обновляется", W,
+     "        if s.mode == \"play\" and self.settings[\"show_thoughts\"]:\n", "        if False:\n", TU),
+    ("ui: новичок без правил", AT, "            if level == \"novice\":", "            if False:", TU),
 ]

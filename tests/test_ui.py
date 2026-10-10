@@ -150,7 +150,8 @@ def test_thoughts_show_grid_and_scores(app, win):
         if s.over:
             break
         if s.human_turn() and len(s.legal()) > 1:
-            assert wait(app, lambda: g.thoughts is not None, 20)
+            # свежие мысли - к этому ходу (на ходу ИИ на панели только ваш учёт карт)
+            assert wait(app, lambda: g.thoughts is not None and g.thoughts_token == g.token, 20)
             break
         if s.human_turn():
             g.on_move_chosen(bot.choose(s.obs(s.human)))
@@ -584,3 +585,60 @@ def test_thread_that_ignores_stop_survives_widget_destruction(app):
     gc.collect()
     release.set()
     assert wait(app, lambda: not ai_thread._ORPHANS, 5)
+
+
+@pytest.mark.parametrize("mode", ["demo", "play"])
+@pytest.mark.parametrize("level", ["novice", "medium", "strong"])
+def test_thoughts_panel_is_never_empty(app, win, mode, level):
+    """«Мысли ИИ» включены - на панели всегда есть текст: чей ход и что на сетке. В показе
+    «ИИ против ИИ» видны сетка учёта и оценки ходов (у новичка - что он играет по правилам).
+    В 1.0.0-кандидате панель в показе была пустой: ход ИИ приходил раньше мыслей, и они
+    выбрасывались как устаревшие (17 из 17 у новичка)."""
+    g = win.game
+    g.change("mode", mode)
+    g.change("level", level)
+    g.change("players", 2)
+    g.change("show_thoughts", True)
+    unseen = []                    # ходы ИИ в показе, сделанные без мыслей к этой позиции
+    orig_apply = g._apply
+
+    def spy_apply(move):
+        s = g.session
+        if (mode == "demo" and s.ai_turn() and len(s.legal()) > 1
+                and not (g.thoughts is not None and g.thoughts_token == g.token
+                         and g.thoughts["player"] == s.state.turn)):
+            unseen.append(move)
+        orig_apply(move)
+    g._apply = spy_apply
+    g.start_game(seed=31)
+    pp = g.play
+    seen = {"grid": 0, "scores": 0, "novice": 0, "ai_turn_text": 0, "fresh_on_ai_turn": 0}
+    texts = []
+    bot = NoviceAgent()
+    end = time.time() + 90
+    while len(g.session.moves) < 10 and not g.session.over and time.time() < end:
+        app.processEvents()
+        s = g.session
+        if mode == "play" and s.human_turn() and g.thoughts is not None:
+            g.on_move_chosen(bot.choose(s.obs(s.human)))
+            continue
+        time.sleep(0.005)
+        assert pp.thoughts_text.isVisibleTo(pp) and pp.thoughts_text.text(), "пустая панель мыслей"
+        texts.append(pp.thoughts_text.text())
+        seen["grid"] += pp.grid.isVisibleTo(pp)
+        seen["scores"] += pp.moves.isVisibleTo(pp) and pp.moves.count() > 0
+        seen["novice"] += g.t("th_rules") in pp.thoughts_text.text()
+        seen["ai_turn_text"] += s.ai_turn()
+        seen["fresh_on_ai_turn"] += s.ai_turn() and g.thoughts is not None and g.thoughts_token == g.token
+    assert len(g.session.moves) >= 10 or g.session.over
+    assert seen["grid"] > 0, "сетка учёта ни разу не показана"
+    if mode == "demo":
+        if level == "novice":
+            assert seen["novice"] > 0, "нет «играет по правилам»"
+        else:
+            assert seen["scores"] > 0, "оценки ходов ни разу не показаны"
+    assert seen["ai_turn_text"] > 0
+    assert seen["fresh_on_ai_turn"] > 0, "на ходу ИИ сетка не обновляется"
+    assert not unseen, f"в показе ИИ сходил раньше, чем показал мысли: {len(unseen)} раз"
+    g.change("show_thoughts", False)
+    g.change("mode", "play")

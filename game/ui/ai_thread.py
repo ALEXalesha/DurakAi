@@ -111,13 +111,18 @@ class AiController(QObject):
             return agent.choose(obs, seed=seed)
         return self._start(token, "move", fn)
 
-    def request_thoughts(self, token, obs, seed):
-        """Учёт карт и оценка каждого допустимого хода сильным поиском - для игрока obs."""
+    def request_thoughts(self, token, obs, seed, level="strong"):
+        """Учёт карт и оценка каждого допустимого хода сильным поиском - для игрока obs.
+        level="novice": новичок ходы не оценивает, вместо оценок - ход, который выбирают
+        его правила (поле "novice")."""
         from game.ai.search import SearchAgent
         thinker = SearchAgent.for_level("strong", samples=THOUGHT_SAMPLES, time_limit=1.0)
 
         def fn(stop):
             belief = tracker.belief(obs)
+            if level == "novice":
+                return {"player": obs.player, "belief": belief, "scores": [],
+                        "novice": make_agent("novice").choose(obs) if obs.legal else None}
             scores = thinker.analyze(obs, seed=seed, stop=stop) if len(obs.legal) > 1 else \
                 [(m, 0.0) for m in obs.legal]
             return {"player": obs.player, "belief": belief, "scores": scores}

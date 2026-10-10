@@ -19,11 +19,32 @@ MOVE_TIME = {"novice": None, "medium": 1.0, "strong": 1.5}
 THOUGHT_SAMPLES = 16
 
 
+_ORPHANS = []
+_UNDERTAKER = None
+
+
+class _Undertaker(QObject):
+    """Живёт в потоке окна: сигнал finished сироты приходит сюда очередью, а не в сам поток."""
+
+    def bury(self):
+        for j in list(_ORPHANS):
+            if j.isFinished():
+                j.wait()
+                _ORPHANS.remove(j)
+
+
+def _undertaker():
+    global _UNDERTAKER
+    if _UNDERTAKER is None:
+        _UNDERTAKER = _Undertaker()
+    return _UNDERTAKER
+
+
 class _Job(QThread):
     done = Signal(int, str, object)
 
-    def __init__(self, token, kind, fn, parent=None):
-        super().__init__(parent)
+    def __init__(self, token, kind, fn):
+        super().__init__()
         self.token = token
         self.kind = kind
         self.fn = fn
@@ -59,25 +80,27 @@ class AiController(QObject):
 
     def _start(self, token, kind, fn):
         self._reap()
-        job = _Job(token, kind, fn, self)
+        # Без родителя: поток живёт, пока на него есть ссылка в self.jobs (или в _ORPHANS).
+        # В 0.9.0 он был дочерним объектом контроллера и копился до закрытия окна (около 45
+        # за партию вдвоём, вместе с агентом и наблюдением). А разрушение окна с ещё
+        # работающим дочерним QThread - это qFatal «Destroyed while thread is still
+        # running» и падение всей программы.
+        job = _Job(token, kind, fn)
         job.done.connect(self.ready)
-        # Поток кончился - объект удаляется (в потоке окна). Без этого каждый ход ИИ
-        # оставлял дочерний QThread вместе с агентом и наблюдением: 0.9.0 копила их
-        # до закрытия окна, около 45 за партию вдвоём.
-        job.finished.connect(self._finished)
+        job.finished.connect(self._reap)        # слот контроллера: выполняется в потоке окна
         self.jobs.append(job)
         job.start()
         return job
 
-    def _finished(self):
-        job = self.sender()
-        if job in self.jobs:
-            self.jobs.remove(job)
-        if job is not None:
-            job.deleteLater()
-
     def _reap(self):
-        self.jobs = [j for j in self.jobs if j.isRunning()]
+        """Кончившиеся потоки - из списка; последняя ссылка уходит, объект удаляется."""
+        alive = []
+        for j in self.jobs:
+            if j.isFinished():
+                j.wait()                        # поток вышел целиком, удалять безопасно
+            elif j.isRunning():
+                alive.append(j)
+        self.jobs = alive
 
     def request_move(self, token, obs, level, seed):
         agent = self.agent(level)
@@ -116,4 +139,12 @@ class AiController(QObject):
             left = max(0, int((deadline - time.monotonic()) * 1000))
             j.wait(left)
         self._reap()
-        return not self.jobs
+        # Не успевшие остановиться (машина перегружена) уходят в _ORPHANS: окно можно
+        # разрушать, поток доработает до флага остановки сам и только потом удалится.
+        for j in self.jobs:
+            j.done.disconnect(self.ready)
+            _ORPHANS.append(j)
+            j.finished.connect(_undertaker().bury)
+        self.jobs = []
+        _undertaker().bury()
+        return not _ORPHANS

@@ -39,6 +39,11 @@ def win(app, tmp_path):
     yield w
     g.shutdown()
     w.close()
+    # окно разрушается сразу и в потоке окна, а не когда-нибудь сборщиком мусора,
+    # возможно в потоке ИИ
+    w.deleteLater()
+    from PySide6.QtCore import QCoreApplication, QEvent
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def wait(app, cond, limit=30.0):
@@ -481,12 +486,16 @@ def test_finished_ai_threads_are_deleted(app, win):
     g.start_game(seed=8)
     assert wait(app, lambda: g.session.over, 60)
     assert len(g.session.moves) > 20
-    assert wait(app, lambda: not g.ai.busy(), 5)
+    # список чистит сам сигнал finished, без вызова busy()
+    assert wait(app, lambda: not g.ai.jobs, 5)
     for _ in range(5):
         app.processEvents()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    assert len(g.ai.findChildren(QThread)) <= 1
-    assert not g.ai.jobs
+    import gc
+    from game.ui.ai_thread import _Job
+    gc.collect()
+    assert not g.ai.findChildren(QThread)
+    assert sum(isinstance(o, _Job) for o in gc.get_objects()) <= 1
     g.change("mode", "play")
 
 
@@ -552,3 +561,26 @@ def test_deal_flies_from_the_deck_and_ai_waits_for_it(app, win):
     g.change("anim_ms", 0)
     g.change("mode", "play")
     g.change("players", 2)
+
+
+def test_thread_that_ignores_stop_survives_widget_destruction(app):
+    """Поток, не успевший остановиться за shutdown() (перегруженная машина), уходит в
+    сироты: окно разрушается, а поток дорабатывает сам. Разрушение работающего QThread -
+    это qFatal и падение всей программы; в 0.9.0 от этого спасал только gc.freeze, который
+    не давал сборщику разрушить старые окна."""
+    import gc
+    import threading as th
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from game.ui import ai_thread
+    ctl = ai_thread.AiController()
+    release = th.Event()
+    ctl._start(1, "move", lambda stop: release.wait(5) and None)
+    assert ctl.busy()
+    assert ctl.shutdown(100) is False                 # не успел - и честно сказал
+    assert not ctl.jobs and len(ai_thread._ORPHANS) == 1
+    ctl.deleteLater()
+    del ctl
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
+    release.set()
+    assert wait(app, lambda: not ai_thread._ORPHANS, 5)

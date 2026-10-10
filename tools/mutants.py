@@ -129,7 +129,8 @@ MUTANTS += [
      "        pass", TU),
     ("ui: скрытая игра ходит", W, "        if self.hidden:                   # resume() запустит ход заново\n            return\n",
      "", TU),
-    ("ui: поток ИИ не удаляется", AT, "            job.deleteLater()", "            pass", TU),
+    ("ui: поток ИИ не удаляется", AT, "        job.finished.connect(self._reap)", "        pass", TU),
+    ("ui: несостоявшийся поток не в сиротах", AT, "            _ORPHANS.append(j)\n", "", TU),
 ]
 MUTANTS += [
     ("search: перебор не слышит стоп", S,

@@ -104,7 +104,8 @@ a tab next to other games for the first time. Found and fixed, each with a test 
 | In 0.9.0 | Risk | Now |
 |---|---|---|
 | The game widget called `gc.freeze()` | The garbage collector is per process: inside the shell every object alive at that moment (about 625 thousand in the benchmark) moved to the permanent generation and could never be freed, even as garbage | No call; a law test checks that creating the widget and playing do not change the frozen count, the enabled flag or the thresholds, and that `game/` and `aikit/` contain no `gc.freeze`, `disable` or `set_threshold` |
-| Each AI request is its own QThread, a child of the widget | Threads were kept until the window closed, with their agent and observation: 51, 92, 136 objects after three two-player games | A finished thread is deleted (`deleteLater`); after a game at most one thread object is left |
+| Each AI request is its own QThread, a child of the widget | Threads were kept until the window closed, with their agent and observation: 51, 92, 136 objects after three two-player games | A thread has no parent and its own `finished` signal drops it from the list; after a game at most one thread object is left |
+| The window was destroyed together with its AI threads | If `shutdown()` missed 2 s (overloaded machine), destroying a window with a running QThread is a qFatal that kills the whole program. In 0.9.0 `gc.freeze` hid it: old windows were never destroyed. Without it the Gitea CI once aborted in the middle of a garbage collection | Threads that did not stop in time become orphans, run to the stop flag and only then get deleted; a test makes a thread deaf to the flag and destroys its window |
 | The "Play" and "New game" buttons passed `clicked(False)` as the seed | Every game started from a button had the same deal (seed 0); the N key worked, so the tests missed it | The buttons call `start_game` without arguments |
 | Space and T worked on every page | From the menu, stats or settings they played "Done" or "Take" for the human in the hidden game, which then played out in the background and went into the stats | Human moves are accepted only on the table page |
 | The exact endgame solver ignored the stop flag and the move time limit | The strong AI thought up to 2.8 s with a 1.5 s limit, and closing the window could miss the 2 s contract | The flag and the deadline are checked every 64 nodes, then regular search takes over |
@@ -147,10 +148,10 @@ less than 16 ms, one Windows timer tick. The freeze cost the shell memory for go
 
 ## Tests
 
-229 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
+230 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
 AI waits have timeouts. Rules are covered by hand-built deals for every rule plus
 property tests on random games (all 36 cards always accounted for). `tools/mutate.py`
-breaks the product on purpose in 67 places (rules, honesty, tracking, search, network,
+breaks the product on purpose in 68 places (rules, honesty, tracking, search, network,
 training, window, and since 1.0.0 life in a tab: collector, pause, threads, deal) - every
 mutant is caught. `python main.py --selftest out.txt` checks a
 built exe without a screen.

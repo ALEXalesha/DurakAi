@@ -37,8 +37,16 @@ def test_no_private_strings_in_tracked_files():
     # домашний Gitea - личное; github.com в клоне с GitHub - нет (он есть в скрипте выкладки)
     if m and not m.group(1).lower().endswith(PUBLIC_HOSTS):
         secrets.append(re.escape(m.group(1)))
-    secrets.append(re.escape("Drive" + "\\" + "the author"))
-    secrets.append(re.escape("Drive" + "/" + "the author"))
+    # личная папка проектов - папка над репозиторием (строкой не пишется: иначе утечка)
+    parent = os.path.dirname(ROOT)
+    if len(parent) > 3:
+        secrets.append(re.escape(parent))
+        secrets.append(re.escape(parent.replace("\\", "/")))
+    # имя автора - из локальной настройки git (publish.privateName: основа имени по-русски
+    # и по-английски через |), её же берёт скрипт выкладки на GitHub
+    for stem in git("config", "publish.privateName").split("|"):
+        if len(stem.strip()) >= 4:
+            secrets.append(re.escape(stem.strip()))
     pattern = re.compile("|".join(secrets), re.IGNORECASE)
     bad = []
     for f in tracked_files():

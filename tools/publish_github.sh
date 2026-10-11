@@ -26,16 +26,21 @@ PUBLIC_GITEA='gitea.local'
 # Заменяет её tools/scrub_private.pl, строки получает через окружение.
 export PRIVATE_DIR="$(cd "$(dirname "$0")/../.." && pwd -W)"
 export PRIVATE_DIR_BS="$(printf '%s' "$PRIVATE_DIR" | sed 's#/#\\#g')"
+# Четвёртое - имя автора (в docs, CHANGELOG и сообщениях коммитов). Основы имени - в
+# локальной настройке `git config publish.privateName` (через |), строкой не пишутся.
+export PRIVATE_NAME="$(git config publish.privateName || true)"
+NAME_RE="$(printf '%s' "$PRIVATE_NAME" | sed 's/[][.*^$\/]/\\&/g')"
 TAG="${1:-}"
 
 cd "$(dirname "$0")/.."
 SCRUB="$(pwd -W)/tools/scrub_private.pl"
 
 git branch -f github-main main
+# Почта в авторе и коммитере, а в сообщениях коммитов - папка и имя (тот же scrub_private.pl).
 FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --env-filter "
   if [ \"\$GIT_AUTHOR_EMAIL\" = '$PRIVATE_EMAIL' ]; then export GIT_AUTHOR_EMAIL='$PUBLIC_EMAIL'; fi
   if [ \"\$GIT_COMMITTER_EMAIL\" = '$PRIVATE_EMAIL' ]; then export GIT_COMMITTER_EMAIL='$PUBLIC_EMAIL'; fi
-" github-main >/dev/null 2>&1
+" --msg-filter "perl -p '$SCRUB'" github-main >/dev/null 2>&1
 git update-ref -d refs/original/refs/heads/github-main 2>/dev/null || true
 
 # Личное убирается и из содержимого файлов по всей публикуемой истории.
@@ -46,7 +51,8 @@ git update-ref -d refs/original/refs/heads/github-main 2>/dev/null || true
 # `|| true`: без совпадений git grep возвращает 1, и при pipefail скрипт молча
 # обрывался бы здесь.
 DIRTY=$( { git grep -I -l -E "$PRIVATE_EMAIL|$LAN_GITEA" $(git rev-list github-main) -- 2>/dev/null;
-           git grep -I -l -i -F -e "$PRIVATE_DIR" -e "$PRIVATE_DIR_BS" $(git rev-list github-main) -- 2>/dev/null; } \
+           git grep -I -l -i -F -e "$PRIVATE_DIR" -e "$PRIVATE_DIR_BS" $(git rev-list github-main) -- 2>/dev/null;
+           [ -z "$NAME_RE" ] || git grep -I -l -i -E "$NAME_RE" $(git rev-list github-main) -- 2>/dev/null; } \
         | sed 's/^[^:]*://' | sort -u | tr '\n' ' ' || true)
 if [ -n "$DIRTY" ]; then
   echo "личное в файлах: $DIRTY- переписываю содержимое"
@@ -78,6 +84,17 @@ fi
 if git grep -I -q -i -F -e "$PRIVATE_DIR" -e "$PRIVATE_DIR_BS" $(git rev-list github-main) -- 2>/dev/null; then
   echo "личная папка проектов осталась в файлах публикуемой истории - пуш отменён" >&2
   exit 1
+fi
+
+if [ -n "$NAME_RE" ]; then
+  if git grep -I -i -E "$NAME_RE" $(git rev-list github-main) -- >/dev/null 2>&1; then
+    echo "имя автора осталось в файлах публикуемой истории - пуш отменён" >&2
+    exit 1
+  fi
+  if git log github-main --format='%B' | grep -i -E "$NAME_RE" >/dev/null; then
+    echo "имя автора осталось в сообщениях коммитов - пуш отменён" >&2
+    exit 1
+  fi
 fi
 
 echo "ветка github-main: $(git rev-list --count github-main) коммитов, $(git log -1 --format=%h github-main)"

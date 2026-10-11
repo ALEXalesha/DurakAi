@@ -29,7 +29,7 @@ export PRIVATE_DIR_BS="$(printf '%s' "$PRIVATE_DIR" | sed 's#/#\\#g')"
 # Четвёртое - имя автора (в docs, CHANGELOG и сообщениях коммитов). Основы имени - в
 # локальной настройке `git config publish.privateName` (через |), строкой не пишутся.
 export PRIVATE_NAME="$(git config publish.privateName || true)"
-NAME_RE="$(printf '%s' "$PRIVATE_NAME" | sed 's/[][.*^$\/]/\\&/g')"
+NAME_RE="$PRIVATE_NAME"          # основы - буквы, без знаков регулярных выражений
 TAG="${1:-}"
 
 cd "$(dirname "$0")/.."

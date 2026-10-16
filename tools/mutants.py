@@ -112,7 +112,7 @@ MUTANTS += [
      "elif self.settings[\"show_thoughts\"]:\n                self.ai.request_thoughts(self.token, s.obs(s.human),",
      "elif self.settings[\"show_thoughts\"]:\n                self.ai.request_thoughts(self.token, s.obs(1),", TU),
     ("ui: подглядывание не отмечается", W, "                self.session.peeked = True", "                pass", TU),
-    ("ui: статистика не пишется", W, "            if not s.peeked:", "            if s.peeked:", TU),
+    ("ui: статистика не пишется", W, "        if not s.peeked:", "        if s.peeked:", TU),
     ("ui: потоки не ждут", AT, "            j.wait(left)", "            pass", TU),
     ("ui: перевод мышью не работает", TBL, "                if m[0] in (ATTACK, TRANSFER):", "                if m[0] == ATTACK:", TU),
 ]
@@ -174,7 +174,7 @@ MUTANTS += [
      "        if not self.has_data():\n            p.end()\n            return\n        series = ", TC),
     ("charts: журнал теряет номер партии", HI, "            self.next = max(last + 1, raw[\"next\"] if is_int(raw.get(\"next\")) else 1)",
      "            self.next = 1", TC),
-    ("ui: партия не идёт в журнал", W, "                self.history.record({", "                ({", TU),
+    ("ui: партия не идёт в журнал", W, "            self.history.record({", "            ({", TU),
     ("ui: графики не меняют тему", W, "        for chart in self.stats.charts:\n            chart.set_theme(self.ctx.theme)\n",
      "", TU),
     ("charts: разница карт без знака", HI, "        return -left[human]", "        return left[human]", TC),
@@ -211,4 +211,30 @@ MUTANTS += [
      "        s = self.session\n        if True:\n            self.ctx.stats.record(", TA),
     ("abandon: разница карт - ваши", HI, "        return max((left[q] for q in range(len(left)) if q not in out and q != human), default=0)",
      "        return left[human]", TA),
+]
+# 16.10, снимки автора к 1.0.2: подписи стола всегда видны, у колоды и бито - подписи
+TB = "game/ui/table.py"
+TL = "tests/test_layout.py"
+MUTANTS += [
+    ("layout: рука снизу на подписи", TB, '"bottom": QPointF(W / 2, H - ch * 0.5 - lh - 10),',
+     '"bottom": QPointF(W / 2, H - ch * 0.5 - 30),', TL),
+    ("layout: рука сверху без места подписи", TB, "top = 4 + lh + 4 + ch * 0.5", "top = ch * 0.62 + 18", TL),
+    ("layout: подпись бока под веером", TB, "box = QRectF(6, top - 4 - lh, W - 12, lh)",
+     "box = QRectF(6, center.y() + ch * 0.75 + 4, W - 12, lh)", TL),
+    ("layout: подпись бока на веере", TB, "box = QRectF(6, top - 4 - lh, W - 12, lh)",
+     "box = QRectF(6, center.y() - lh / 2, W - 12, lh)", TL),
+    ("layout: подпись бито под косой стопкой", TB, 'add("discard", QRectF(disc.center().x() - cw * 2, low + 4, cw * 4, ch),',
+     'add("discard", QRectF(disc.center().x() - cw * 2, disc.bottom() + 4, cw * 4, ch),', TL),
+    ("layout: веера втроём на всю ширину", TB, "(0.44 if half else 0.62)", "0.62", TL),
+    ("layout: колода просто числом", TB, 'T["deck_pile"].format(n=len(s.deck))', "str(len(s.deck))", TL),
+    ("layout: бито просто числом", TB, 'T["discard_pile"].format(n=s.discard.bit_count())',
+     "str(s.discard.bit_count())", TL),
+    ("layout: подписи не рисуются", TB, "p.drawText(lab.rect, lab.align, lab.text)", "pass", TL),
+    ("layout: подпись снизу за краем", TB, "add(q, QRectF(0, H - lh - 4, W, lh)", "add(q, QRectF(0, H - 22, W, lh)", TL),
+    ("layout: подпись сверху за краем", TB, "add(q, QRectF(center.x() - W / 4, 4, W / 2, lh)",
+     "add(q, QRectF(center.x() - W / 4, -6, W / 2, lh)", TL),
+    ("layout: подпись бока над веером без своей высоты", TB, "box = QRectF(6, top - 4 - lh, W - 12, lh)",
+     "box = QRectF(6, top - 4, W - 12, lh)", TL),
+    ("layout: «берёт» слипается со строкой соперников", W, 'name=names[st_.defender]) + ". " + sub',
+     'name=names[st_.defender]) + " " + sub', TL),
 ]

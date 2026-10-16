@@ -974,7 +974,7 @@ class GameWidget(QWidget):
             else:
                 sub = t("play_text", level=t(s.level).lower(), variant=variant)
             if st_.taking and st_.defender != s.human:
-                sub = t("taking", name=names[st_.defender]) + " " + sub
+                sub = t("taking", name=names[st_.defender]) + ". " + sub
             pp.substatus.setText(sub)
         trump_name = t("trump") + ": " + "♠♣♦♥"[st_.trump]
         pp.info.setText(f"{trump_name} · " + (t("deck_left", n=len(st_.deck)) if st_.deck else t("deck_empty"))

@@ -44,6 +44,7 @@ discard pile, trump, deck size, card counts, who picked up what).
 <img src="docs/preview_charts.png" width="880" alt="Statistics charts: win share, results by level, game length, card difference, AI strength from the passport">
 
 - Cards are drawn by our own code (suits are built from circles and polygons); no third-party decks.
+- The piles on the table are labelled "Deck N" and "Discard N". Each player's name and role (attacks, defends, out, fool, "…" while thinking) is never covered by cards: side opponents have it above their fan, top and bottom players on their own line at the edge. A law test checks this on 9 table sizes (up to a 4K screen), 2-4 players, hands up to 30 cards.
 - Paint themes (dark and light) with a matching table cloth, Russian and English, the window reopens where it was closed.
 
 ## Honesty, tested
@@ -166,11 +167,11 @@ less than 16 ms, one Windows timer tick. The freeze cost the shell memory for go
 
 ## Tests
 
-273 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
+284 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
 AI waits have timeouts. Rules are covered by hand-built deals for every rule plus
 property tests on random games (all 36 cards always accounted for). `tools/mutate.py`
-breaks the product on purpose in 91 places (rules, honesty, tracking, search, network,
-training, window, and since 1.0.0 life in a tab: collector, pause, threads, deal) - every
+breaks the product on purpose in 104 places (rules, honesty, tracking, search, network,
+training, window, table layout, and since 1.0.0 life in a tab: collector, pause, threads, deal) - every
 mutant is caught. `python main.py --selftest out.txt` checks a
 built exe without a screen.
 

@@ -10,13 +10,14 @@ import math
 import time
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
 from aikit import theme as aitheme
 from game.core import cards as C
 from game.core.durak import ATTACK, DEFEND, TRANSFER
 from game.ui import cardpaint as cp
+from game.ui.i18n import EN, RU
 
 
 def sort_key(c, trump):
@@ -37,6 +38,19 @@ class Place:
     def same(self, other):
         return (other is not None and abs(self.rect.x() - other.rect.x()) < 0.5
                 and abs(self.rect.y() - other.rect.y()) < 0.5 and abs(self.angle - other.angle) < 0.5)
+
+
+class Label:
+    """Подпись стола: key - номер игрока, 'deck' или 'discard'."""
+    __slots__ = ("key", "rect", "text", "color", "align", "font")
+
+    def __init__(self, key, rect, text, color, align, font):
+        self.key = key
+        self.rect = rect
+        self.text = text
+        self.color = color
+        self.align = align
+        self.font = font
 
 
 class Flight:
@@ -166,14 +180,22 @@ class TableWidget(QWidget):
             return ("tl", "tr")[k - 1]
         return ("left", "top", "right")[k - 1]
 
+    def label_height(self):
+        """Высота строки подписи (жирным): под неё оставлено место над и под руками."""
+        return QFontMetricsF(self.label_font(True)).height()
+
     def seat_center(self, seat):
+        """Центр руки. Подпись сверху и снизу - своя строка у края, руки отступают на её
+        высоту: при крупном окне шрифт больше, и раньше подпись уходила за край."""
         W, H = self.width(), self.height()
         cw, ch = self.card_size()
+        lh = self.label_height()
+        top = 4 + lh + 4 + ch * 0.5
         return {
-            "bottom": QPointF(W / 2, H - ch * 0.5 - 30),
-            "top": QPointF(W / 2, ch * 0.62 + 18),
-            "tl": QPointF(W * 0.27, ch * 0.62 + 18),
-            "tr": QPointF(W * 0.73, ch * 0.62 + 18),
+            "bottom": QPointF(W / 2, H - ch * 0.5 - lh - 10),
+            "top": QPointF(W / 2, top),
+            "tl": QPointF(W * 0.27, top),
+            "tr": QPointF(W * 0.73, top),
             "left": QPointF(cw * 0.95, H * 0.42),
             "right": QPointF(W - cw * 0.95, H * 0.42),
         }[seat]
@@ -223,12 +245,14 @@ class TableWidget(QWidget):
             y += ch * 0.22
         return QRectF(x, y, cw, ch)
 
-    def hand_rects(self, cards, center, face, vertical=False, raise_cards=()):
+    def hand_rects(self, cards, center, face, vertical=False, raise_cards=(), half=False):
+        """half - рука в верхнем углу втроём: веер в своей половине ширины (открытые руки двух
+        соперников раньше налезали друг на друга и уходили за край)."""
         cw, ch = self.card_size()
         n = len(cards)
         if n == 0:
             return {}
-        span = (self.width() * (0.62 if not vertical else 0.0)) if not vertical else self.height() * 0.36
+        span = self.width() * (0.44 if half else 0.62) if not vertical else self.height() * 0.36
         if not face:
             span = cw * 2.4 if not vertical else ch * 1.6
         step = min(cw * (0.72 if face else 0.22), (span - cw) / max(n - 1, 1)) if n > 1 else 0
@@ -282,7 +306,8 @@ class TableWidget(QWidget):
                 vertical = seat in ("left", "right")
                 raise_cards = self.playable() | ({self.selected} if self.selected >= 0 else set()) \
                     if mine else ()
-                rects = self.hand_rects(cards, center, True, vertical and not mine, raise_cards)
+                rects = self.hand_rects(cards, center, True, vertical and not mine, raise_cards,
+                                         half=seat in ("tl", "tr"))
                 for c in cards:
                     rect, i = rects[c]
                     places[c] = Place(rect, 0, True, 30 + i)
@@ -291,6 +316,141 @@ class TableWidget(QWidget):
                 for c in cards:
                     places[c] = Place(r, 0, False, 30)
         return places
+
+    # ---------- то, что нарисовано картами, и подписи ----------
+
+    def deck_back_rects(self):
+        """Рубашки колоды (до трёх, со сдвигом) - без открытого козыря."""
+        if self.state is None or len(self.state.deck) <= 1:
+            return []
+        deck_r = self.deck_rect()
+        return [deck_r.translated(-k * 1.5, -k * 1.5) for k in range(min(3, len(self.state.deck) - 1))]
+
+    def discard_backs(self):
+        """Углы рубашек стопки «бито» (стопка тем толще, чем больше карт)."""
+        nd = self.state.discard.bit_count() if self.state is not None else 0
+        return [(k * 37) % 23 - 11 for k in range(min(4, max(1, nd // 6)))] if nd else []
+
+    def closed_stack(self, q):
+        """Рубашки закрытой руки соперника q: до восьми со сдвигом вокруг центра места."""
+        s = self.state
+        if s is None or self.reveal or q == self.viewer:
+            return []
+        cw, ch = self.card_size()
+        seat = self.seat_of(q)
+        center = self.seat_center(seat)
+        vertical = seat in ("left", "right")
+        shown = min(s.hands[q].bit_count(), 8)
+        step = cw * 0.18
+        out = []
+        for k in range(shown):
+            off = (k - (shown - 1) / 2) * step
+            out.append(QRectF(center.x() - cw / 2 + (0 if vertical else off),
+                              center.y() - ch / 2 + (off if vertical else 0), cw, ch))
+        return out
+
+    @staticmethod
+    def _rotated_box(rect, angle):
+        if not angle:
+            return QRectF(rect)
+        a = math.radians(angle)
+        w = abs(rect.width() * math.cos(a)) + abs(rect.height() * math.sin(a))
+        h = abs(rect.width() * math.sin(a)) + abs(rect.height() * math.cos(a))
+        c = rect.center()
+        return QRectF(c.x() - w / 2, c.y() - h / 2, w, h)
+
+    def card_boxes(self):
+        """[(чьё, прямоугольник)] - всё, что на столе нарисовано картами, когда полёты кончились:
+        руки (q), колода ('deck'), бито ('discard'), карты стола ('table'). Подписи не должны
+        их задевать (закон в tests/test_layout.py)."""
+        s = self.state
+        if s is None:
+            return []
+        owner = {}
+        for p in range(s.n):
+            for c in C.cards_of(s.hands[p]):
+                owner[c] = p
+        for c in s.deck:
+            owner[c] = "deck"
+        for a, d in s.table:
+            owner[a] = "table"
+            if d >= 0:
+                owner[d] = "table"
+        out = []
+        for c, pl in self.places.items():
+            if not pl.face:
+                continue           # рубашки рук, колоды и бито - ниже, как они нарисованы
+            out.append((owner.get(c, "table"), self._rotated_box(pl.rect, pl.angle)))
+        for q in range(s.n):
+            out += [(q, r) for r in self.closed_stack(q)]
+        if s.deck:
+            out += [("deck", r) for r in self.deck_back_rects()]
+        else:
+            out.append(("deck", self.deck_rect()))
+        disc = self.discard_rect()
+        backs = self.discard_backs()
+        out += [("discard", self._rotated_box(disc, a)) for a in backs] or [("discard", disc)]
+        return out
+
+    def label_font(self, bold=False):
+        cw, ch = self.card_size()
+        font = QFont("Segoe UI")
+        font.setPixelSize(max(11, int(ch * 0.13)))
+        font.setBold(bold)
+        return font
+
+    def label_items(self):
+        """Подписи стола: имя и роль каждого игрока, колода, бито. rect - там, где текст
+        на самом деле нарисован (по метрикам шрифта)."""
+        s = self.state
+        if s is None:
+            return []
+        pal = aitheme.palette(self.theme)
+        cw, ch = self.card_size()
+        out = []
+
+        def add(key, box, text, color, align, bold=False, valign=True):
+            font = self.label_font(bold)
+            flags = align | Qt.AlignmentFlag.AlignVCenter if valign else align
+            rect = QFontMetricsF(font).boundingRect(box, int(flags.value), text)
+            out.append(Label(key, rect, text, color, flags, font))
+
+        T = EN if self.lang == "en" else RU
+        W, H = self.width(), self.height()
+        # колода и бито: подпись под стопкой, по её центру
+        deck_r = self.deck_rect()
+        add("deck", QRectF(deck_r.center().x() - cw * 2, deck_r.bottom() + 4, cw * 4, ch),
+            T["deck_pile"].format(n=len(s.deck)), pal["text"], Qt.AlignmentFlag.AlignTop
+            | Qt.AlignmentFlag.AlignHCenter, valign=False)
+        disc = self.discard_rect()
+        low = max([self._rotated_box(disc, a).bottom() for a in self.discard_backs()] + [disc.bottom()])
+        add("discard", QRectF(disc.center().x() - cw * 2, low + 4, cw * 4, ch),
+            T["discard_pile"].format(n=s.discard.bit_count()), pal["text"], Qt.AlignmentFlag.AlignTop
+            | Qt.AlignmentFlag.AlignHCenter, valign=False)
+        lh = self.label_height()
+        for q in range(s.n):
+            seat = self.seat_of(q)
+            center = self.seat_center(seat)
+            name = self.names[q] if q < len(self.names) else str(q)
+            role = self.badges.get(q, "")
+            text = name + (f" · {role}" if role else "") + (" …" if q == self.thinking else "")
+            color = pal["warn"] if q == s.turn and not s.over else pal["text"]
+            if s.over and s.fool == q:
+                color = pal["bad"]
+            bold = q == s.turn
+            if seat == "bottom":
+                add(q, QRectF(0, H - lh - 4, W, lh), text, color, Qt.AlignmentFlag.AlignHCenter, bold)
+            elif seat in ("top", "tl", "tr"):
+                add(q, QRectF(center.x() - W / 4, 4, W / 2, lh), text, color, Qt.AlignmentFlag.AlignHCenter, bold)
+            else:
+                # бок: над веером, прижата к краю окна. Веер вчетвером длинный (до 30 карт) -
+                # подпись под ним налезала на карты; сверху веер растёт от неё прочь.
+                mine = [r for o, r in self.card_boxes() if o == q]
+                top = min([r.top() for r in mine] + [center.y() - ch / 2])
+                align = Qt.AlignmentFlag.AlignLeft if seat == "left" else Qt.AlignmentFlag.AlignRight
+                box = QRectF(6, top - 4 - lh, W - 12, lh)
+                add(q, box, text, color, align, bold)
+        return out
 
     # ---------- рисование ----------
 
@@ -322,31 +482,30 @@ class TableWidget(QWidget):
         if s.deck:
             if s.trump_card in s.deck and s.trump_card not in flying:
                 self._draw_place(p, s.trump_card, self.places[s.trump_card])
-            if len(s.deck) > 1:
-                for k in range(min(3, len(s.deck) - 1)):
-                    cp.draw_back(p, deck_r.translated(-k * 1.5, -k * 1.5), self.theme)
+            for r in self.deck_back_rects():
+                cp.draw_back(p, r, self.theme)
         else:
             self._draw_suit_mark(p, deck_r, s.trump)
-        self._text(p, QRectF(deck_r.left() - cw * 0.5, deck_r.bottom() + 4, cw * 2.2, 22),
-                   str(len(s.deck)) if s.deck else "0", pal["text"], Qt.AlignmentFlag.AlignLeft)
         # отбой
         disc = self.discard_rect()
-        nd = s.discard.bit_count()
-        if nd:
-            for k in range(min(4, max(1, nd // 6))):
-                p.save()
-                p.translate(disc.center())
-                p.rotate((k * 37) % 23 - 11)
-                cp.draw_back(p, QRectF(-cw / 2, -ch / 2, cw, ch), self.theme)
-                p.restore()
-        else:
+        backs = self.discard_backs()
+        for ang in backs:
+            p.save()
+            p.translate(disc.center())
+            p.rotate(ang)
+            cp.draw_back(p, QRectF(-cw / 2, -ch / 2, cw, ch), self.theme)
+            p.restore()
+        if not backs:
             p.setPen(QPen(QColor(col["slot"]), 1.5, Qt.PenStyle.DashLine))
             p.drawRoundedRect(disc, 8, 8)
-        self._text(p, QRectF(disc.left() - cw * 0.3, disc.bottom() + 4, cw * 1.6, 22), str(nd),
-                   pal["text"], Qt.AlignmentFlag.AlignCenter)
-        # соперники и подписи
+        # соперники
         for q in range(s.n):
             self._draw_seat(p, q, flying)
+        # подписи: игроки, колода, бито
+        for lab in self.label_items():
+            p.setFont(lab.font)
+            p.setPen(QColor(lab.color))
+            p.drawText(lab.rect, lab.align, lab.text)
         # стол
         target_slots = self._target_slots()
         for i, (a, d) in enumerate(s.table):
@@ -424,13 +583,7 @@ class TableWidget(QWidget):
                                  dim=mine and bool(self.legal) and c not in playable, badge=badge)
         else:
             n = len(cards)
-            vertical = seat in ("left", "right")
-            shown = min(n, 8)
-            step = cw * 0.18
-            for k in range(shown):
-                off = (k - (shown - 1) / 2) * step
-                r = QRectF(center.x() - cw / 2 + (0 if vertical else off),
-                           center.y() - ch / 2 + (off if vertical else 0), cw, ch)
+            for r in self.closed_stack(q):
                 cp.draw_back(p, r, self.theme)
             if n:
                 badge = QRectF(center.x() - 16, center.y() - 13, 32, 26)
@@ -438,20 +591,6 @@ class TableWidget(QWidget):
                 p.setBrush(QColor(0, 0, 0, 150))
                 p.drawRoundedRect(badge, 8, 8)
                 self._text(p, badge, str(n), "#ffffff", Qt.AlignmentFlag.AlignCenter, bold=True)
-        # подпись: имя и роль
-        name = self.names[q] if q < len(self.names) else str(q)
-        role = self.badges.get(q, "")
-        text = name + (f" · {role}" if role else "") + (" …" if q == self.thinking else "")
-        if seat == "bottom":
-            r = QRectF(center.x() - 200, self.height() - 24, 400, 22)
-        elif seat in ("left", "right"):
-            r = QRectF(center.x() - cw, center.y() + ch * 0.75 + 4, cw * 2, 40)
-        else:
-            r = QRectF(center.x() - 160, 2, 320, 20)
-        color = pal["warn"] if q == s.turn and not s.over else pal["text"]
-        if s.over and s.fool == q:
-            color = pal["bad"]
-        self._text(p, r, text, color, Qt.AlignmentFlag.AlignCenter, bold=q == s.turn)
 
     def _draw_suit_mark(self, p, rect, suit):
         col = cp.cloth(self.theme)

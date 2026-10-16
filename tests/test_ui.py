@@ -335,13 +335,65 @@ def test_settings_change_rules(app, win):
 def test_first_rule_after_fool(app, win):
     g = win.game
     g.change("first_rule", "after_fool")
-    g.last_fool = (1, 2)
+    g.last_fool = {"play": (1, 2)}
     g.start_game(seed=3)
     assert g.session.state.attacker == 0
-    g.last_fool = (0, 2)
+    g.last_fool = {"play": (0, 2)}
     g.start_game(seed=3)
     assert g.session.state.attacker == 1
     g.change("first_rule", "lowest")
+
+
+def test_first_rule_after_fool_ignores_the_demo(app, win):
+    """Проверка 16.10: «следующий за дураком» брал дурака из показа «ИИ против ИИ», где
+    человек не играл, - и показ решал, кто ходит первым в вашей партии."""
+    g = win.game
+    g.change("first_rule", "after_fool")
+    g.change("level", "novice")
+    g.change("mode", "demo")
+    for demo_seed in range(1, 20):                        # показ, где дурак есть (не ничья)
+        g.start_game(seed=demo_seed)
+        assert wait(app, lambda: g.session.over, 120)
+        if g.session.fool() >= 0:
+            break
+    fool = g.session.fool()
+    assert fool >= 0
+    g.change("mode", "play")
+    for seed in range(40):                                # раздача, где правила дают разное
+        if State.new(Rules(players=2), seed=seed).attacker != (fool + 1) % 2:
+            break
+    g.start_game(seed=seed)
+    assert g.session.state.attacker == State.new(Rules(players=2), seed=seed).attacker
+    g.change("mode", "demo")                              # следующий показ - уже по дураку показа
+    g.start_game(seed=seed)
+    assert g.session.state.attacker == (fool + 1) % 2
+    g._invalidate()
+    g.change("mode", "play")
+    g.change("first_rule", "lowest")
+
+
+def test_passport_checks_name_the_real_opponents(app, win):
+    """Проверка 16.10: у новичка втроём и вчетвером соперники в паспорте - случайные игроки,
+    а страница статистики подписывала «втроём с новичками»: «Новичок втроём с новичками -
+    дурак 0,2 %» выглядело невозможным."""
+    import json as _json
+    with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "game", "models", "durak-value.json"),
+              encoding="utf-8") as f:
+        checks = _json.load(f)["checks"]
+    assert any(c["villain"] == "random" and c["players"] > 2 for c in checks)
+    g = win.game
+    words = {"ru": {"random": "случайн", "novice": "новичк", "medium": "средн"},
+             "en": {"random": "random", "novice": "novice", "medium": "medium"}}
+    for lang in ("ru", "en"):
+        g.ctx.set_lang(lang)
+        g.show_page("stats")
+        for r, ch in enumerate(checks):
+            text = g.stats.checks.item(r, 1).text().lower()
+            assert words[lang][ch["villain"]] in text, (lang, ch["level"], ch["check"], text)
+            for other, w in words[lang].items():
+                if other != ch["villain"]:
+                    assert w not in text, (lang, ch["level"], ch["check"], text)
+    g.ctx.set_lang("ru")
 
 
 def test_take_move_constant():

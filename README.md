@@ -160,10 +160,10 @@ less than 16 ms, one Windows timer tick. The freeze cost the shell memory for go
 
 ## Tests
 
-254 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
+256 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
 AI waits have timeouts. Rules are covered by hand-built deals for every rule plus
 property tests on random games (all 36 cards always accounted for). `tools/mutate.py`
-breaks the product on purpose in 79 places (rules, honesty, tracking, search, network,
+breaks the product on purpose in 81 places (rules, honesty, tracking, search, network,
 training, window, and since 1.0.0 life in a tab: collector, pause, threads, deal) - every
 mutant is caught. `python main.py --selftest out.txt` checks a
 built exe without a screen.

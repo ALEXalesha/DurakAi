@@ -179,3 +179,10 @@ MUTANTS += [
      "", TU),
     ("charts: разница карт без знака", HI, "        return -left[human]", "        return left[human]", TC),
 ]
+# 16.10, независимая проверка: подпись проверок паспорта и дурак из показа
+MUTANTS += [
+    ("ui: паспорт - новичок втроём «с новичками»", W,
+     '    if ch.get("players", 2) > 2 and ch.get("villain") == "random":', '    if False:', TU),
+    ("ui: дурак из показа решает первый ход", W, 'last = self.last_fool.get(s["mode"])',
+     'last = next((v for v in self.last_fool.values() if v), None)', TU),
+]

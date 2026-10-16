@@ -64,6 +64,7 @@ RU = {
     "check_vs_random": "против случайного", "check_vs_novice": "против новичка",
     "check_vs_medium": "против среднего", "check_3p": "втроём с новичками",
     "check_4p": "вчетвером с новичками",
+    "check_3p_random": "втроём со случайными", "check_4p_random": "вчетвером со случайными",
     "col_level": "Уровень", "col_check": "Проверка", "col_result": "Итог",
     "checks_text": "Вдвоём - доля очков (победа 1, ничья 1/2) на {n} партиях парами раздач. "
                    "Втроём и вчетвером - как часто ИИ остаётся дураком; при случайной игре - 1/N.",
@@ -147,6 +148,7 @@ EN = {
     "check_vs_random": "vs random", "check_vs_novice": "vs novice",
     "check_vs_medium": "vs medium", "check_3p": "3 players with novices",
     "check_4p": "4 players with novices",
+    "check_3p_random": "3 players with random players", "check_4p_random": "4 players with random players",
     "col_level": "Level", "col_check": "Check", "col_result": "Result",
     "checks_text": "Two players: score share (win 1, draw 1/2) over {n} games in paired deals. "
                    "Three and four players: how often the AI ends up the fool; random play gives 1/N.",

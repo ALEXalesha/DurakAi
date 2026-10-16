@@ -63,6 +63,14 @@ def number(n):
     return f"{n:,}".replace(",", " ")
 
 
+def check_label(t, ch):
+    """Подпись проверки паспорта по настоящим соперникам: втроём и вчетвером у новичка они
+    случайные, а не новички (подпись «с новичками» делала «дурак 0,2 %» невозможным)."""
+    if ch.get("players", 2) > 2 and ch.get("villain") == "random":
+        return t(f"check_{ch['check']}_random")
+    return t("check_" + ch["check"])
+
+
 def load_passport():
     with open(PASSPORT, encoding="utf-8") as f:
         return json.load(f)
@@ -392,7 +400,7 @@ class StatsPage(QWidget):
             checks = [c for c in load_passport()["checks"] if c["players"] == 2]
         except (OSError, ValueError, KeyError, TypeError):
             checks = []
-        self.passport_chart.set_data([f"{t(c['level'])} {t('check_' + c['check'])}" for c in checks],
+        self.passport_chart.set_data([f"{t(c['level'])} {check_label(t, c)}" for c in checks],
                                      [(t("ch_score"), "accent", [c["score"] for c in checks])] if checks else [])
 
     def refresh(self):
@@ -430,7 +438,7 @@ class StatsPage(QWidget):
         self.checks.setRowCount(len(rows))
         for r, ch in enumerate(rows):
             self.checks.setItem(r, 0, item(t(ch["level"]), Qt.AlignmentFlag.AlignLeft))
-            self.checks.setItem(r, 1, item(t("check_" + ch["check"])))
+            self.checks.setItem(r, 1, item(check_label(t, ch)))
             if ch["players"] == 2:
                 res = f"{100 * ch['score']:.1f}%"
             else:
@@ -576,7 +584,7 @@ class GameWidget(QWidget):
         self.hidden = False           # оболочка спрятала вкладку: pause() / resume()
         self.thoughts = None
         self.thoughts_token = -1
-        self.last_fool = None
+        self.last_fool = {}           # режим -> (дурак, игроков) прошлой партии этого режима
         self.rng = random.Random()
         self.ai = AiController(self)
         self.ai.ready.connect(self.on_ai)
@@ -702,8 +710,10 @@ class GameWidget(QWidget):
         if seed is None:
             seed = self.rng.randrange(2 ** 31)
         first = None
-        if s["first_rule"] == "after_fool" and self.last_fool is not None and self.last_fool[1] == s["players"]:
-            first = (self.last_fool[0] + 1) % s["players"]
+        # дурак прошлой партии того же стола: показ «ИИ против ИИ» не решает, кто ходит в вашей
+        last = self.last_fool.get(s["mode"])
+        if s["first_rule"] == "after_fool" and last is not None and last[1] == s["players"]:
+            first = (last[0] + 1) % s["players"]
         self.session = Session(s["players"], s["level"], s["mode"], s["transfer"], s["five"], seed, first)
         self.session.peeked = s["reveal"] and s["mode"] == "play"
         self.paused = False
@@ -832,7 +842,7 @@ class GameWidget(QWidget):
 
     def _finish(self):
         s = self.session
-        self.last_fool = (s.fool(), s.n) if s.fool() != DRAW else None
+        self.last_fool[s.mode] = (s.fool(), s.n) if s.fool() != DRAW else None
         outcome = s.outcome_for_human()
         if outcome and not s.recorded:
             if not s.peeked:

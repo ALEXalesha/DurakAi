@@ -58,6 +58,10 @@ RU = {
     "ch_passport": "Сила ИИ по паспорту модели, вдвоём (1000 партий на проверку)", "ch_score": "доля очков",
     "col_setup": "Игроков · уровень", "col_games": "Партий", "col_wins": "Не дурак",
     "col_draws": "Ничьи", "col_fools": "Дурак", "col_streak": "Серия",
+    "count_note": "Партия считается с вашего первого хода. Брошенная потом (новая партия, меню, "
+                  "закрытие окна) - дурак, а если вы уже вышли - не дурак. Вышли, пока другие "
+                  "доигрывают, - не дурак при любом их конце. Партии с подглядыванием и показ "
+                  "«ИИ против ИИ» не считаются.",
     "passport": "Паспорт модели", "not_trained": "Модель ещё не обучена.",
     "passport_text": "Сеть {features} входов, слои {hidden}, {params} весов. Обучение: {games} партий, "
                      "{positions} позиций, {time}.",
@@ -142,6 +146,10 @@ EN = {
     "ch_passport": "AI strength from the model passport, two players (1000 games per check)", "ch_score": "score share",
     "col_setup": "Players · level", "col_games": "Games", "col_wins": "Not fool",
     "col_draws": "Draws", "col_fools": "Fool", "col_streak": "Streak",
+    "count_note": "A game counts from your first move. Left after that (new game, menu, closing "
+                  "the window) it is a loss as the fool, or not the fool if you are already out. "
+                  "Out while the others play on - not the fool whatever their ending. Games with "
+                  "peeking and the AI vs AI show do not count.",
     "passport": "Model passport", "not_trained": "The model is not trained yet.",
     "passport_text": "Network: {features} inputs, layers {hidden}, {params} weights. Training: {games} games, "
                      "{positions} positions, {time}.",

@@ -339,6 +339,8 @@ class StatsPage(QWidget):
         mc.addWidget(self.mine_title)
         self.table = table_widget(6)
         mc.addWidget(self.table)
+        self.count_note = label("", "hint", wrap=True)      # как считаются партии
+        mc.addWidget(self.count_note)
         col.addWidget(mine)
         # графики: доля побед по партиям, итоги по уровням, длина партии, разница карт,
         # сила ИИ по паспорту (правило автора 10.10 - графики во всех играх с ИИ)
@@ -420,6 +422,7 @@ class StatsPage(QWidget):
             for c, f in enumerate(("games", "wins", "draws", "losses", "best_streak"), start=1):
                 self.table.setItem(r, c, item(str(e[f])))
         fit_height(self.table)
+        self.count_note.setText(t("count_note"))
         self.pass_title.setText(t("passport"))
         try:
             pp = load_passport()
@@ -624,6 +627,7 @@ class GameWidget(QWidget):
 
     def show_page(self, name):
         if name != "play":
+            self._abandon()                  # из меню в эту партию не вернуться
             self._invalidate()
         self.stack.setCurrentWidget(self.pages[name])
         if name == "stats":
@@ -695,6 +699,7 @@ class GameWidget(QWidget):
 
     def shutdown(self):
         """Окно закрывается: таймеры стоп, поиски остановить и дождаться (не дольше 2 с)."""
+        self._abandon()
         self._invalidate()
         return self.ai.shutdown(2000)
 
@@ -706,6 +711,7 @@ class GameWidget(QWidget):
     # --- партия ---
 
     def start_game(self, seed=None):
+        self._abandon()
         s = self.settings
         if seed is None:
             seed = self.rng.randrange(2 ** 31)
@@ -742,9 +748,9 @@ class GameWidget(QWidget):
         if self._human_may(MOVE_TAKE):
             self._apply(MOVE_TAKE)
 
-    def _apply(self, move):
+    def _apply(self, move, auto=False):
         s = self.session
-        s.apply(move)
+        s.apply(move, auto=auto)
         self.ctx.sound.play("capture" if move == MOVE_TAKE else "move")
         # прошлые мысли остаются на панели, пока не придут новые: панель не мигает пустой
         self.after_change()
@@ -799,7 +805,7 @@ class GameWidget(QWidget):
             return
         if s.human_turn():
             if s.legal() == [MOVE_PASS]:
-                self._apply(MOVE_PASS)
+                self._apply(MOVE_PASS, auto=True)
             return
         legal = s.legal()
         p = s.state.turn
@@ -845,14 +851,31 @@ class GameWidget(QWidget):
         self.last_fool[s.mode] = (s.fool(), s.n) if s.fool() != DRAW else None
         outcome = s.outcome_for_human()
         if outcome and not s.recorded:
-            if not s.peeked:
-                self.ctx.stats.record(s.stats_key(), outcome)
-                st_ = s.state
-                margin = hist.margin([h.bit_count() for h in st_.hands], st_.fool, s.human, outcome)
-                self.history.record({"players": s.n, "level": s.level, "outcome": outcome,
-                                     "moves": len(s.moves), "margin": margin})
-            s.recorded = True
+            st_ = s.state
+            self._record(outcome, hist.margin([h.bit_count() for h in st_.hands], st_.fool, s.human, outcome))
             self.ctx.sound.play(outcome)
+
+    def _abandon(self):
+        """Партию бросили (новая партия, меню, закрытие окна). После вашего первого хода она
+        идёт в статистику: вы уже вышли - «не дурак», иначе дурак. Без звука."""
+        s = self.session
+        if s is None or s.recorded:
+            return
+        outcome = s.abandon_outcome()
+        if outcome is None:
+            return
+        s.abandoned = True
+        st_ = s.state
+        self._record(outcome, hist.abandon_margin([h.bit_count() for h in st_.hands], st_.out, s.human, outcome))
+
+    def _record(self, outcome, margin):
+        """Итог партии - в статистику и журнал графиков (кроме подсмотренной); один раз."""
+        s = self.session
+        if not s.peeked:
+            self.ctx.stats.record(s.stats_key(), outcome)
+            self.history.record({"players": s.n, "level": s.level, "outcome": outcome,
+                                 "moves": len(s.moves), "margin": margin})
+        s.recorded = True
 
     def _thoughts_note(self, th, names):
         """Чьи это мысли и что в них: новичок, единственный ход или поиск с оценками."""

@@ -34,6 +34,12 @@ discard pile, trump, deck size, card counts, who picked up what).
   from the model passport. Charts are drawn with QPainter, no matplotlib; with no data yet a
   card says where the data will come from. Games for the charts go to `games.json` next to
   the statistics, only those that count (no peeking, not the demo).
+- **How games are counted**: a game counts from your first move (an automatic pass when you have
+  nothing to throw in is not your move). Left after that - new game, menu or closing the window -
+  it is a loss as the fool; if you are already out and the AIs play on, it is "not the fool"
+  (the card difference is then the biggest hand among those still playing). Once you are out
+  while others play on, you are not the fool whatever their ending, even if the last two go out
+  together. The statistics page says the same.
 
 <img src="docs/preview_charts.png" width="880" alt="Statistics charts: win share, results by level, game length, card difference, AI strength from the passport">
 
@@ -160,10 +166,10 @@ less than 16 ms, one Windows timer tick. The freeze cost the shell memory for go
 
 ## Tests
 
-256 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
+273 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
 AI waits have timeouts. Rules are covered by hand-built deals for every rule plus
 property tests on random games (all 36 cards always accounted for). `tools/mutate.py`
-breaks the product on purpose in 81 places (rules, honesty, tracking, search, network,
+breaks the product on purpose in 91 places (rules, honesty, tracking, search, network,
 training, window, and since 1.0.0 life in a tab: collector, pause, threads, deal) - every
 mutant is caught. `python main.py --selftest out.txt` checks a
 built exe without a screen.

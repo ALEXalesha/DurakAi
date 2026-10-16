@@ -186,3 +186,29 @@ MUTANTS += [
     ("ui: дурак из показа решает первый ход", W, 'last = self.last_fool.get(s["mode"])',
      'last = next((v for v in self.last_fool.values() if v), None)', TU),
 ]
+# 16.10, решение автора: брошенная партия после первого хода - в статистике
+SE = "game/ui/session.py"
+TA = "tests/test_abandon.py"
+MUTANTS += [
+    ("abandon: меню не бросает партию", W, "            self._abandon()                  # из меню",
+     "            pass                  # из меню", TA),
+    ("abandon: новая партия не бросает старую", W, "    def start_game(self, seed=None):\n        self._abandon()\n",
+     "    def start_game(self, seed=None):\n", TA),
+    ("abandon: закрытие окна не бросает партию", W,
+     "        self._abandon()\n        self._invalidate()\n        return self.ai.shutdown(2000)",
+     "        self._invalidate()\n        return self.ai.shutdown(2000)", TA),
+    ("abandon: считается и до первого хода", SE, "if self.human < 0 or self.over or self.human_moves == 0:",
+     "if self.human < 0 or self.over:", TA),
+    ("abandon: автоматический пас - ваш ход", SE, "if not auto and self.human >= 0 and self.state.turn == self.human:",
+     "if self.human >= 0 and self.state.turn == self.human:", TA),
+    ("abandon: вышедший бросил - дурак", SE, 'return "win" if self.human in self.state.out else "loss"',
+     'return "loss"', TA),
+    ("abandon: вышедший раньше ничьей - ничья", SE, "        if self.out_early:\n            return \"win\"\n", "", TA),
+    ("abandon: брошенная пишется дважды", W, "        if s is None or s.recorded:\n            return\n        outcome = s.abandon_outcome()",
+     "        if s is None:\n            return\n        outcome = s.abandon_outcome()", TA),
+    ("abandon: подсмотренная брошенная считается", W,
+     "        s = self.session\n        if not s.peeked:\n            self.ctx.stats.record(",
+     "        s = self.session\n        if True:\n            self.ctx.stats.record(", TA),
+    ("abandon: разница карт - ваши", HI, "        return max((left[q] for q in range(len(left)) if q not in out and q != human), default=0)",
+     "        return left[human]", TA),
+]

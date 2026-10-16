@@ -14,14 +14,14 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFrame, QGridLayout
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from aikit import settings as st
-from aikit import theme
+from aikit import gamelog, theme
+from aikit.charts import BarChart, ChartGrid, LineChart
 from aikit.widgets import Combo, button, card, label, restyle, segmented
 from game.ai import tracker
 from game.ai.agents import LEVELS
 from game.core.durak import DRAW, MOVE_PASS, MOVE_TAKE, TRANSFER
 from game.ui import history as hist
 from game.ui.ai_thread import AiController
-from game.ui.charts import BarChart, LineChart
 from game.ui.i18n import translator
 from game.ui.session import Session
 from game.ui.table import TableWidget
@@ -354,15 +354,20 @@ class StatsPage(QWidget):
         self.levels_chart = BarChart()
         self.moves_chart = LineChart(percent=False)
         self.margin_chart = LineChart(percent=False)
+        self.streak_chart = LineChart(percent=False)         # рекорды: серии побед (1.0.4)
+        self.streak_chart.color_key, self.streak_chart.second_key = "accent", "warn"
+        self.streak_chart.stepped = {0, 1}
         self.passport_chart = BarChart()
-        grid = QGridLayout()
-        grid.setSpacing(10)
-        for i, w in enumerate((self.share_chart, self.levels_chart, self.moves_chart, self.margin_chart)):
-            grid.addWidget(w, i // 2, i % 2)
-        gl.addLayout(grid)
-        gl.addWidget(self.passport_chart)
+        for c in (self.moves_chart, self.margin_chart, self.streak_chart):
+            c.integer = True
+        # сетка aikit: две колонки, в узком окне одна; паспорт - на всю строку
+        self.chart_grid = ChartGrid()
+        for w in (self.share_chart, self.levels_chart, self.moves_chart, self.margin_chart, self.streak_chart):
+            self.chart_grid.add(w)
+        self.chart_grid.add(self.passport_chart, wide=True)
+        gl.addWidget(self.chart_grid)
         self.charts = (self.share_chart, self.levels_chart, self.moves_chart, self.margin_chart,
-                       self.passport_chart)
+                       self.streak_chart, self.passport_chart)
         col.addWidget(gc_)
         pc = card()
         lay = QVBoxLayout(pc)
@@ -397,6 +402,9 @@ class StatsPage(QWidget):
         self.margin_chart.set_texts(t("ch_margin"), t("ch_margin_empty"))
         self.margin_chart.x_label = t("ch_game_no")
         self.margin_chart.set_points(hist.series(games, "margin"))
+        self.streak_chart.set_texts(t("ch_streak"), t("ch_streak_empty"), t("ch_game_no"))
+        self.streak_chart.names = (t("ch_streak_now"), t("ch_record"))
+        self.streak_chart.set_points(*gamelog.streaks(games))
         self.passport_chart.set_texts(t("ch_passport"), t("not_trained"))
         try:
             checks = [c for c in load_passport()["checks"] if c["players"] == 2]

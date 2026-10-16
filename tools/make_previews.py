@@ -102,8 +102,9 @@ def main(out):
         g.show_page("stats")
         settle(app, g, 200)
         shots.append((window.grab(), f"preview_stats{suffix}.png"))
-        charts_card = g.stats.share_chart.parentWidget()
-        charts_card.resize(1180, charts_card.sizeHint().height())
+        charts_card = g.stats.chart_grid.parentWidget()
+        h = charts_card.heightForWidth(1180)
+        charts_card.resize(1180, h if h > 0 else charts_card.sizeHint().height())
         shots.append((charts_card.grab(), f"preview_charts{suffix}.png"))
     # картинка для списка игр в ИИ-Игротеке: 16:9
     ctx.set_theme("dark")

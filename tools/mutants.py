@@ -162,7 +162,7 @@ MUTANTS += [
     ("ui: новичок без правил", AT, "            if level == \"novice\":", "            if False:", TU),
 ]
 HI = "game/ui/history.py"
-CH = "game/ui/charts.py"
+CH = "aikit/charts.py"          # графики - общий aikit с 1.0.4
 TC = "tests/test_charts.py"
 MUTANTS += [
     ("charts: окно скользящего среднего на 1 шире", HI, "if window is not None and k >= window:",
@@ -170,8 +170,7 @@ MUTANTS += [
     ("charts: доли по уровням не делятся", HI,
      "series = [(o, [count[lv][o] / sum(count[lv].values()) for lv in groups])",
      "series = [(o, [count[lv][o] / 1 for lv in groups])", TC),
-    ("charts: пустой график без надписи", CH, "        if not self.has_data():\n            self.empty(p)\n            p.end()\n            return\n        series = ",
-     "        if not self.has_data():\n            p.end()\n            return\n        series = ", TC),
+    ("charts: пустой график без надписи", CH, "            self.empty(p, top)\n", "            pass\n", TC),
     ("charts: журнал теряет номер партии", HI, "            self.next = max(last + 1, raw[\"next\"] if is_int(raw.get(\"next\")) else 1)",
      "            self.next = 1", TC),
     ("ui: партия не идёт в журнал", W, "            self.history.record({", "            ({", TU),
@@ -237,4 +236,14 @@ MUTANTS += [
      "box = QRectF(6, top - 4, W - 12, lh)", TL),
     ("layout: «берёт» слипается со строкой соперников", W, 'name=names[st_.defender]) + ". " + sub',
      'name=names[st_.defender]) + " " + sub', TL),
+]
+
+# 1.0.4: графики из общего aikit.charts, серии побед и рекорд
+TSC = "tests/test_stats_charts.py"
+MUTANTS += [
+    ("charts: серия вместо рекорда", W, "        self.streak_chart.set_points(*gamelog.streaks(games))",
+     "        self.streak_chart.set_points(gamelog.streaks(games)[1], gamelog.streaks(games)[1])", TSC),
+    ("charts: серий нет в сетке", W, "self.levels_chart, self.moves_chart, self.margin_chart, self.streak_chart):\n            self.chart_grid.add(w)",
+     "self.levels_chart, self.moves_chart, self.margin_chart):\n            self.chart_grid.add(w)", TSC),
+    ("charts: подписи не проверяются", CH, "            self.clipped.append(text)", "            pass", "aikit/tests/test_charts.py"),
 ]

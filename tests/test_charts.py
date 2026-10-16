@@ -1,4 +1,4 @@
-"""Графики статистики (game/ui/charts.py) и журнал партий (game/ui/history.py).
+"""Графики статистики (общий aikit/charts.py, с 1.0.4) и журнал партий (game/ui/history.py).
 
 Графики рисуются без экрана (Qt offscreen) на пустых данных, на одной точке и на 1000 точках
 и не падают; пустой график говорит словами, откуда возьмутся данные. Ряды для графиков
@@ -12,7 +12,8 @@ import pytest
 from hypothesis import given, settings, strategies as st
 from PySide6.QtWidgets import QApplication
 
-from game.ui import charts, history
+from aikit import charts
+from game.ui import history
 
 
 @pytest.fixture

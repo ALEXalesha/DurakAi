@@ -30,8 +30,9 @@ discard pile, trump, deck size, card counts, who picked up what).
 <img src="docs/preview_thoughts.png" width="880" alt="AI vs AI demo: on the right, the thoughts of the AI to move - where it thinks the opponent's cards are and the score of each of its moves">
 - **Statistics with charts**: win share by game (moving average over 20 games and over all),
   results against each AI level, game length in moves, the card difference at the end (plus is
-  how many cards the fool kept when you got out, minus is how many you kept) and AI strength
-  from the model passport. Charts are drawn with QPainter, no matplotlib; with no data yet a
+  how many cards the fool kept when you got out, minus is how many you kept), winning streaks
+  with the record, and AI strength from the model passport. Charts come from the shared
+  `aikit.charts` (QPainter, no matplotlib), two columns or one in a narrow window; with no data yet a
   card says where the data will come from. Games for the charts go to `games.json` next to
   the statistics, only those that count (no peeking, not the demo).
 - **How games are counted**: a game counts from your first move (an automatic pass when you have

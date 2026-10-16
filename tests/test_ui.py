@@ -700,10 +700,10 @@ def test_thoughts_panel_is_never_empty(app, win, mode, level):
 
 
 def _charts(g):
-    from game.ui.charts import BarChart, LineChart
+    from aikit.charts import BarChart, LineChart
     page = g.stats
     return {"share": page.share_chart, "levels": page.levels_chart, "moves": page.moves_chart,
-            "margin": page.margin_chart, "passport": page.passport_chart}, (BarChart, LineChart)
+            "margin": page.margin_chart, "streak": page.streak_chart, "passport": page.passport_chart}, (BarChart, LineChart)
 
 
 def test_stats_page_has_charts_and_words_when_empty(app, win):
@@ -738,7 +738,7 @@ def test_finished_game_goes_to_history_and_charts(app, win):
                           "moves": 50 + i, "margin": (i % 7) - 3})
     g.show_page("stats")
     cs, _ = _charts(g)
-    for name in ("share", "levels", "moves", "margin"):
+    for name in ("share", "levels", "moves", "margin", "streak"):
         assert cs[name].has_data(), name
     assert cs["levels"].groups == [g.t("novice"), g.t("strong")]
     assert len(cs["share"].points) == 31 and len(cs["share"].second) == 31

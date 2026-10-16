@@ -1,7 +1,7 @@
 Unicode true
 
 !define APP "DurakAi"
-!define VERSION "1.0.3"
+!define VERSION "1.0.4"
 !define PUBLISHER "ALEXaloysha"
 !define REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP}"
 

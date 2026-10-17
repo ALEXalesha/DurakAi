@@ -28,6 +28,7 @@ discard pile, trump, deck size, card counts, who picked up what).
 - **AI thoughts** (the checkbox on the right of the table): a 4 × 9 grid per opponent and for the deck with the probability of each card, and the score of each move. Against the AI this is your card tracking and the strong AI's score of your moves; on the AI's turn its thoughts stay hidden and the grid follows your observation. In the AI vs AI demo it shows the thoughts of the AI to move; for the novice, instead of scores, a "plays by the rules" line with the move the rules choose. A line above the grid always says whose turn it is and whose thoughts these are.
 
 <img src="docs/preview_thoughts.png" width="880" alt="AI vs AI demo: on the right, the thoughts of the AI to move - where it thinks the opponent's cards are and the score of each of its moves">
+
 - **Statistics with charts**: win share by game (moving average over 20 games and over all),
   results against each AI level, game length in moves, the card difference at the end (plus is
   how many cards the fool kept when you got out, minus is how many you kept), winning streaks

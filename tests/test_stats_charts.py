@@ -19,12 +19,13 @@ def labels_intact(app, win, g):
         for lang in ("ru", "en"):
             win.ctx.set_theme(theme)
             win.ctx.set_lang(lang)
-            for width in (1400, win.minimumWidth()):
+            for width in (1400, 3840, win.minimumWidth()):
                 win.resize(width, 820)
                 app.processEvents()
                 for c in all_charts(g.stats):
                     c.grab()
                     assert c.clipped == [], (theme, lang, width, c.title, c.clipped)
+                    assert c.overlaps() == [], (theme, lang, width, c.title, c.overlaps())
                 rects = [c.geometry() for c in g.stats.chart_grid.charts()]
                 assert not any(a.intersects(b) for i, a in enumerate(rects) for b in rects[i + 1:])
     win.ctx.set_theme("dark")

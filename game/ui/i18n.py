@@ -88,6 +88,7 @@ RU = {
     "first_lowest": "Младший козырь", "first_after_fool": "Следующий за дураком",
     "saved_note": "Настройки сохраняются сразу.",
     "footer": "DurakAi {v} · ИИ видит только то, что видно игроку",
+    "menu_foot": "партий {games} · не в дураках {wins}",
     "seconds": "{n} с", "minutes": "{n} мин", "hours": "{n} ч",
     "error": "Ошибка ИИ: {e}",
 }
@@ -180,6 +181,7 @@ EN = {
     "first_lowest": "Lowest trump", "first_after_fool": "Player after the fool",
     "saved_note": "Settings are saved at once.",
     "footer": "DurakAi {v} · the AI sees only what a player sees",
+    "menu_foot": "games {games} · not the fool {wins}",
     "seconds": "{n} s", "minutes": "{n} min", "hours": "{n} h",
     "error": "AI error: {e}",
 }

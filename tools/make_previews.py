@@ -69,6 +69,7 @@ def main(out):
         g.change("anim_ms", 0)
         g.change("delay_ms", 0)
         g.show_page("menu")
+        g.menu.set_time(4.5)                    # веер раскрыт
         settle(app, g, 200)
         shots.append((window.grab(), f"preview_menu{suffix}.png"))
         # вдвоём: середина партии, ход человека, на столе пара

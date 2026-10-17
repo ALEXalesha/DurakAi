@@ -47,6 +47,7 @@ discard pile, trump, deck size, card counts, who picked up what).
 
 - Cards are drawn by our own code (suits are built from circles and polygons); no third-party decks.
 - The piles on the table are labelled "Deck N" and "Discard N". Each player's name and role (attacks, defends, out, fool, "…" while thinking) is never covered by cards: side opponents have it above their fan, top and bottom players on their own line at the edge. A law test checks this on 9 table sizes (up to a 4K screen), 2-4 players, hands up to 30 cards.
+- **A "card table" start menu of its own**: green cloth with a gold rim, a fan of cards opening and closing on the left next to the deck with the trump, discards falling; on the right a Georgia title in old gold, card buttons with ♠ ♥ ♦ suits and chip toggles. The game side panel is a rail at the table edge in the same colours. The menu grows with the window up to 4K. Settings span the whole window, like the statistics.
 - Paint themes (dark and light) with a matching table cloth, Russian and English, the window reopens where it was closed.
 
 ## Honesty, tested
@@ -169,7 +170,7 @@ less than 16 ms, one Windows timer tick. The freeze cost the shell memory for go
 
 ## Tests
 
-284 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
+351 pytest checks; the window is tested offscreen only, mouse input uses synthetic events,
 AI waits have timeouts. Rules are covered by hand-built deals for every rule plus
 property tests on random games (all 36 cards always accounted for). `tools/mutate.py`
 breaks the product on purpose in 104 places (rules, honesty, tracking, search, network,

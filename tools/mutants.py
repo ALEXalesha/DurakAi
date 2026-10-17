@@ -123,8 +123,8 @@ MUTANTS += [
 MUTANTS += [
     ("ui: gc.freeze вернулся", W, "        self.ctx = ctx\n        self.t = translator(ctx.lang)",
      "        __import__('gc').freeze()\n        self.ctx = ctx\n        self.t = translator(ctx.lang)", TU),
-    ("ui: pause не останавливает ИИ", W, "        self.hidden = True\n        self._invalidate()\n",
-     "        self.hidden = True\n", TU),
+    ("ui: pause не останавливает ИИ", W, "        self.menu.pause()\n        self._invalidate()\n",
+     "        self.menu.pause()\n", TU),
     ("ui: resume не продолжает", W,
      "        if self.session is not None and self.current_page() == \"play\":\n            self.after_change()",
      "        pass", TU),
@@ -140,8 +140,8 @@ MUTANTS += [
     ("search: перебор без срока", S,
      "                                     (self.deadline is not None and time.perf_counter() > self.deadline)):",
      "                                     (False)):", TS),
-    ("ui: кнопка даёт зерно False", W, 'button("", "menuPrimary", lambda: gw.start_game())',
-     'button("", "menuPrimary", gw.start_game)', TU),
+    ("ui: кнопка даёт зерно False", "game/ui/menu.py", "        self.clicked.connect(lambda _=False: slot())",
+     "        self.clicked.connect(slot)", TU),
     ("ui: клавиши ходят вне стола", W,
      "        return (s is not None and not self.hidden and self.current_page() == \"play\"",
      "        return (s is not None", TU),
@@ -246,4 +246,19 @@ MUTANTS += [
     ("charts: серий нет в сетке", W, "self.levels_chart, self.moves_chart, self.margin_chart, self.streak_chart):\n            self.chart_grid.add(w)",
      "self.levels_chart, self.moves_chart, self.margin_chart):\n            self.chart_grid.add(w)", TSC),
     ("charts: подписи не проверяются", CH, "            self.clipped.append(text)", "            pass", "aikit/tests/test_charts.py"),
+]
+
+# стартовое меню «карточный стол», боковая панель в его стиле, настройки на всю ширину (автор 17.10)
+MN = "game/ui/menu.py"
+TM = "tests/test_menu.py"
+WM = "game/ui/widget.py"
+MUTANTS += [
+    ("menu: стол тикает на паузе вкладки", WM, "        self.hidden = True\n        self.menu.pause()", "        self.hidden = True", TM + " -k lives"),
+    ("menu: карты на колонке", MN, "        right = self.free_right or w * 0.55", "        right = w * 0.95", TM + " -k 'whole or stay_left'"),
+    ("menu: не растёт на 4K", MN, "        return round(max(1.0, min(2.4, w / 1280, h / 800)), 2)", "        return 1.0", TM + " -k scales"),
+    ("menu: колонка шире окна", MN, "        return round(min(540 * self.scale, max(470, self.width() * 0.5)))",
+     "        return round(540 * self.scale * 1.6)", TM + " -k 'whole or stay_left'"),
+    ("menu: веер не раскрывается", MN, "    return 0.5 - 0.5 * math.cos(2 * math.pi * (t % 9.0) / 9.0)", "    return 0.0", TM + " -k fan"),
+    ("menu: боковая панель общего вида", WM, "        self.play.side.setStyleSheet(side_qss(felt))", "        pass", TM + " -k side_panel"),
+    ("menu: настройки узкой колонкой", WM, "        self.box = box\n", "        self.box = box\n        box.setMaximumWidth(760)\n", TM + " -k stretches"),
 ]

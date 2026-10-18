@@ -22,6 +22,8 @@ from game.core.durak import DRAW, MOVE_PASS, MOVE_TAKE, TRANSFER
 from game.ui import history as hist
 from game.ui.ai_thread import AiController
 from game.ui.i18n import translator
+from aikit.skin import SettingsList, SkinPage, StatTiles
+from game.ui.skin import SKIN
 from game.ui.menu import MenuPage, page_qss, side_qss
 from game.ui.menu import palette as felt_palette
 from game.ui.session import Session
@@ -218,28 +220,17 @@ def item(text, align=Qt.AlignmentFlag.AlignCenter):
     return it
 
 
-class StatsPage(QWidget):
+class StatsPage(SkinPage):
+    """Статистика в стиле «карточного стола» (aikit.skin, game/ui/skin.py): сукно с золотой каймой
+    и сброшенными картами, кожаные планки, плитки с крупными числами."""
+
     def __init__(self, gw):
-        super().__init__()
+        super().__init__(SKIN, back=lambda: gw.show_page("menu"))
         self.gw = gw
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        outer.addWidget(scroll)
-        body = page_widget()
-        scroll.setWidget(body)
-        col = QVBoxLayout(body)
-        col.setContentsMargins(26, 22, 26, 22)
-        col.setSpacing(14)
-        top = QHBoxLayout()
-        self.heading = label("", "heading")
-        top.addWidget(self.heading)
-        top.addStretch(1)
-        self.menu_button = button("", None, lambda: gw.show_page("menu"))
-        top.addWidget(self.menu_button)
-        col.addLayout(top)
+        self.menu_button = self.back_button
+        col = self.col
+        self.tiles = StatTiles(4, min_tile=170)
+        col.addWidget(self.tiles)
         mine = card()
         mc = QVBoxLayout(mine)
         mc.setContentsMargins(18, 14, 18, 14)
@@ -321,8 +312,22 @@ class StatsPage(QWidget):
         self.passport_chart.set_data([f"{t(c['level'])} {check_label(t, c)}" for c in checks],
                                      [(t("ch_score"), "accent", [c["score"] for c in checks])] if checks else [])
 
+    def refresh_tiles(self):
+        t = self.gw.t
+        data = list(self.gw.ctx.stats.data.values())
+        games = sum(e["games"] for e in data)
+        wins = sum(e["wins"] for e in data)
+        fools = sum(e["losses"] for e in data)
+        streak = max((e["best_streak"] for e in data), default=0)
+        self.tiles.set_tile(0, games, t("tile_games"))
+        self.tiles.set_tile(1, wins, t("tile_wins"), t("tile_rate", p=round(100 * wins / games)) if games else "")
+        self.tiles.set_tile(2, fools, t("tile_fools"))
+        self.tiles.set_tile(3, streak, t("tile_streak"))
+        self.set_tag(t("tag_stats"))
+
     def refresh(self):
         t = self.gw.t
+        self.refresh_tiles()
         self.refresh_charts()
         self.heading.setText(t("stats_title"))
         self.menu_button.setText(t("menu"))
@@ -372,39 +377,18 @@ class StatsPage(QWidget):
 # --- настройки ---
 
 
-class SettingsPage(QWidget):
+class SettingsPage(SkinPage):
+    """Настройки в стиле «карточного стола»: планки на всю ширину (как статистика; автор 17.10),
+    группы - вид и звук, правила."""
+
     def __init__(self, gw):
-        super().__init__()
+        super().__init__(SKIN, back=lambda: gw.show_page("menu"))
         self.gw = gw
-        outer0 = QVBoxLayout(self)
-        outer0.setContentsMargins(0, 0, 0, 0)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        outer0.addWidget(scroll)
-        body = page_widget()
-        scroll.setWidget(body)
-        outer = QVBoxLayout(body)
-        outer.setContentsMargins(26, 22, 26, 22)
-        outer.setSpacing(14)
-        top = QHBoxLayout()
-        self.heading = label("", "heading")
-        top.addWidget(self.heading)
-        top.addStretch(1)
-        self.menu_button = button("", None, lambda: gw.show_page("menu"))
-        top.addWidget(self.menu_button)
-        outer.addLayout(top)
-        # карточка на всю ширину страницы, как карточки статистики (автор 17.10: настройки
-        # не должны стоять узкой колонкой у левого края); подписи - 3 части, поля - 2
-        box = card()
+        self.menu_button = self.back_button
+        box = SettingsList()
         self.box = box
-        self.grid = QGridLayout(box)
-        self.grid.setContentsMargins(22, 18, 22, 18)
-        self.grid.setHorizontalSpacing(22)
-        self.grid.setVerticalSpacing(16)
-        self.grid.setColumnStretch(0, 3)
-        self.grid.setColumnStretch(1, 2)
-        self.rows = {}
+        self.rows = box.rows
+        box.group("")
         self.theme_combo = Combo()
         for k in theme.THEMES:
             self.theme_combo.addItem("", k)
@@ -424,6 +408,7 @@ class SettingsPage(QWidget):
         self.anim.setRange(0, 800)
         self.anim.valueChanged.connect(lambda v: gw.change("anim_ms", int(v)))
         self._row("anim", self.anim)
+        box.group("")
         self.delay = QSlider(Qt.Orientation.Horizontal)
         self.delay.setRange(0, 3000)
         self.delay.valueChanged.connect(lambda v: gw.change("delay_ms", int(v)))
@@ -439,27 +424,21 @@ class SettingsPage(QWidget):
         self.first_combo.addItem("", "after_fool")
         self.first_combo.currentIndexChanged.connect(lambda i: gw.change("first_rule", self.first_combo.itemData(i)))
         self._row("first_rule", self.first_combo)
-        outer.addWidget(box)
+        self.col.addWidget(box)
         self.note = label("", "hint")
-        outer.addWidget(self.note)
-        outer.addStretch(1)
+        self.col.addWidget(self.note)
+        self.col.addStretch(1)
 
     def _row(self, key, widget):
-        r = len(self.rows)
-        names = QVBoxLayout()
-        names.setSpacing(2)
-        title = label("", "section")
-        hint = label("", "hint", wrap=True)
-        names.addWidget(title)
-        names.addWidget(hint)
-        self.grid.addLayout(names, r, 0)
-        self.grid.addWidget(widget, r, 1)
-        self.rows[key] = (title, hint)
+        self.box.add(key, widget)
 
     def retranslate(self):
         t = self.gw.t
         self.heading.setText(t("settings_title"))
         self.menu_button.setText(t("menu"))
+        self.set_tag(t("tag_settings"))
+        self.box.set_group(0, t("group_view"))
+        self.box.set_group(1, t("group_rules"))
         for key, (title, hint) in self.rows.items():
             title.setText(t(key))
             hint.setText(t(key + "_hint"))
@@ -589,8 +568,9 @@ class GameWidget(QWidget):
         self.play.grid.set_theme(self.ctx.theme, self.ctx.lang)
         for combo in self.findChildren(Combo):
             combo.set_arrow_color(c["text"])
-        for chart in self.stats.charts:
-            chart.set_theme(self.ctx.theme)
+        # настройки и статистика - в стиле «карточного стола» (aikit.skin; автор 17.10)
+        self.stats.set_theme(self.ctx.theme)
+        self.settings_page.set_theme(self.ctx.theme)
         self.update()
 
     def retranslate(self):

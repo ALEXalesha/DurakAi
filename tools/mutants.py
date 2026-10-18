@@ -174,8 +174,7 @@ MUTANTS += [
     ("charts: журнал теряет номер партии", HI, "            self.next = max(last + 1, raw[\"next\"] if is_int(raw.get(\"next\")) else 1)",
      "            self.next = 1", TC),
     ("ui: партия не идёт в журнал", W, "            self.history.record({", "            ({", TU),
-    ("ui: графики не меняют тему", W, "        for chart in self.stats.charts:\n            chart.set_theme(self.ctx.theme)\n",
-     "", TU),
+    ("ui: графики не меняют тему", W, "        self.stats.set_theme(self.ctx.theme)\n", "", "tests/test_pages.py -k follow"),
     ("charts: разница карт без знака", HI, "        return -left[human]", "        return left[human]", TC),
 ]
 # 16.10, независимая проверка: подпись проверок паспорта и дурак из показа
@@ -261,4 +260,6 @@ MUTANTS += [
     ("menu: веер не раскрывается", MN, "    return 0.5 - 0.5 * math.cos(2 * math.pi * (t % 9.0) / 9.0)", "    return 0.0", TM + " -k fan"),
     ("menu: боковая панель общего вида", WM, "        self.play.side.setStyleSheet(side_qss(felt))", "        pass", TM + " -k side_panel"),
     ("menu: настройки узкой колонкой", WM, "        self.box = box\n", "        self.box = box\n        box.setMaximumWidth(760)\n", TM + " -k stretches"),
+    # 18.10: настройки и статистика в стиле стола (aikit.skin)
+    ("pages: настройки общим видом", W, "        self.settings_page.set_theme(self.ctx.theme)\n", "", "tests/test_pages.py -k follow"),
 ]
